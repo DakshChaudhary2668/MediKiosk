@@ -1,0 +1,67 @@
+erDiagram
+    USER ||--o| PATIENT_PROFILE : has
+    PATIENT_PROFILE ||--o{ INTAKE : submits
+    INTAKE ||--o{ INTAKE_ARTIFACT : contains
+    INTAKE ||--o{ TRIAGE_ASSESSMENT : receives
+    TRIAGE_ASSESSMENT ||--o{ REVIEW_DECISION : reviewed_by
+    REVIEW_DECISION ||--o| QUEUE_ENTRY : may_create
+    INTAKE ||--o{ QUEUE_ENTRY : appears_as
+    PATIENT_PROFILE ||--o{ CONSULTATION_RECORD : has
+    INTAKE ||--o{ CONSULTATION_RECORD : contextualizes
+    USER ||--o{ REVIEW_DECISION : authors
+    USER ||--o{ CONSULTATION_RECORD : authors
+    USER ||--o{ AUDIT_EVENT : performs
+
+    USER {
+        string id PK
+        string role_membership
+    }
+    PATIENT_PROFILE {
+        string id PK
+        string user_id FK
+    }
+    INTAKE {
+        string id PK
+        string patient_id FK
+        string status
+        datetime submitted_at
+    }
+    INTAKE_ARTIFACT {
+        string id PK
+        string intake_id FK
+        string kind
+        string storage_reference
+    }
+    TRIAGE_ASSESSMENT {
+        string id PK
+        string intake_id FK
+        string priority
+        string confidence_band
+        string model_version
+    }
+    REVIEW_DECISION {
+        string id PK
+        string assessment_id FK
+        string actor_id FK
+        string decision
+        string final_priority
+    }
+    QUEUE_ENTRY {
+        string id PK
+        string intake_id FK
+        string review_decision_id FK
+        string status
+        datetime ordering_timestamp
+    }
+    CONSULTATION_RECORD {
+        string id PK
+        string patient_id FK
+        string intake_id FK
+        string author_id FK
+    }
+    AUDIT_EVENT {
+        string id PK
+        string actor_id FK
+        string action
+        datetime created_at
+    }

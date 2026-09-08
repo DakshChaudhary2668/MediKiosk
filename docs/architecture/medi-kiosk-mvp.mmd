@@ -1,0 +1,34 @@
+flowchart LR
+    patient[Patient] --> pwa[Next.js PWA]
+    doctor[Doctor] --> pwa
+    admin[Super Admin] --> pwa
+
+    pwa --> api[FastAPI Backend]
+
+    api --> intake[Intake and Record Service]
+    api --> review[Review and Safety Gate]
+    api --> queue[Queue Engine]
+    api --> auth[Auth and Authorization]
+    api --> data[(Supabase DB / Storage)]
+
+    intake --> adapter[AI Adapter]
+    adapter --> ai[Harry AI Engine]
+    ai --> adapter
+    adapter --> review
+
+    review -->|approved decision only| queue
+    queue --> doctorView[Approved Turn-wise Queue]
+    data --> doctorView
+    data --> patientView[Patient Status and Permitted Records]
+    pwa --> doctorView
+    pwa --> patientView
+
+    audit[Audit Events] --> data
+    api --> audit
+
+    classDef human fill:#eef6ff,stroke:#2f6f9f,color:#12344d;
+    classDef system fill:#f4f4f4,stroke:#666,color:#222;
+    classDef safety fill:#fff4df,stroke:#b26a00,color:#4c2d00;
+    class patient,doctor,admin human;
+    class pwa,api,intake,queue,auth,data,adapter,ai,doctorView,patientView,audit system;
+    class review safety;
