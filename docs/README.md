@@ -1,53 +1,75 @@
-# MediKiosk Documentation Context
+# MediKiosk — Production Technical Documentation
 
-## Purpose
+> **AI-Powered Patient Intake, Clinical Pre-Triage, and Hospital Queue Optimization MVP**
 
-This folder is the shared context package for the MediKiosk MVP. It is written for the frontend, backend, AI Engine, clinical/operations reviewers, and AI coding agents working in the repository.
+MediKiosk is an intelligent healthcare kiosk and clinical workflow platform designed to streamline outpatient department (OPD) intake, capture patient symptoms through multilingual voice/text conversational AI, evaluate operational urgency (P0–P3), enforce a Super Admin human-in-the-loop review gate, and deliver an organized priority turn queue to attending physicians.
 
-## Source and precedence
+---
 
-The package is based on the finalized workflow discussed for the MVP. It records the following established direction:
+## 🧭 Master Documentation Index
 
-- The product is a patient intake and clinic queue experience.
-- The frontend is a Next.js PWA.
-- The backend boundary is FastAPI.
-- Supabase is the planned persistence platform.
-- AI performs survey/speech processing and pre-triage support.
-- A Super Admin reviews the AI recommendation before a patient is admitted to the doctor queue.
-- Doctors work from an approved, turn-wise queue and supporting patient records.
-- Swytchcode is out of scope for the MVP.
+| Document | Purpose & Scope |
+| :--- | :--- |
+| [architecture.md](file:///docs/architecture.md) | High-level system architecture, component boundaries, and runtime layers. |
+| [repository-map.md](file:///docs/repository-map.md) | Complete directory and file manifest explaining production code vs. scripts vs. config. |
+| [frontend.md](file:///docs/frontend.md) | Next.js App Router, PWA design, component state, audio capture, and screen documentation. |
+| [backend.md](file:///docs/backend.md) | FastAPI framework, dependency injection, router design, error handling, and resiliency fallbacks. |
+| [api.md](file:///docs/api.md) | Complete OpenAPI/REST API specification (Auth, Patient, Intake, Triage Gate, Queue, Consultation). |
+| [database.md](file:///docs/database.md) | PostgreSQL / Supabase schema, entity relationships (ERD), RLS security policies, and indexes. |
+| [ai-pipeline.md](file:///docs/ai-pipeline.md) | Groq LLaMA prompt architecture, anti-hallucination guardrails, and question bank traversal. |
+| [voice-pipeline.md](file:///docs/voice-pipeline.md) | Sarvam Saaras STT & Bulbul TTS integration, WebM streaming, audio validation, and latency handling. |
+| [queue-engine.md](file:///docs/queue-engine.md) | P0/P1/P2/P3 acuity bands, Admin review gate, token allocation, and Doctor turn queue. |
+| [business-rules.md](file:///docs/business-rules.md) | Strict medical boundaries, non-diagnostic invariants, deterministic red-flag overrides, and role limits. |
+| [authentication-security.md](file:///docs/authentication-security.md) | Supabase Auth, Bearer token handling, dev mode bypass, Row Level Security, and HIPAA/data privacy. |
+| [testing.md](file:///docs/testing.md) | Test suites, clinical workflow verification, anti-hallucination test suite, and execution guide. |
+| [development-setup.md](file:///docs/development-setup.md) | Step-by-step local developer setup guide (Python venv, Node.js, Supabase, Groq, Sarvam). |
+| [deployment.md](file:///docs/deployment.md) | Production build configuration, environment variables, hosting topology, and PWA setup. |
+| [data-flows.md](file:///docs/data-flows.md) | 13 end-to-end data flow sequence diagrams across Patient, Admin, AI, and Doctor actors. |
+| [state-machines.md](file:///docs/state-machines.md) | Lifecycle state machine diagrams (Session, Case, Triage Assessment, Queue Turn, Consultation). |
+| [technical-debt.md](file:///docs/technical-debt.md) | Rigorous architectural debt audit, missing production pieces, and prioritized technical roadmap. |
 
-This package explicitly supersedes the older flow. In particular, AI output is not a final clinical decision and does not directly create a doctor queue entry.
+---
 
-## How to read certainty
+## 🏥 Core Product Architecture at a Glance
 
-- **Confirmed context** means it was directly established in the project discussion.
-- **MVP contract** means a conservative behavior required to make the confirmed workflow implementable. It should be treated as the working integration contract unless an owner changes it.
-- **TBD** means the project discussion did not settle the detail. Implementations should preserve a seam for the decision and must not invent a clinical, privacy, or operational policy.
+```mermaid
+flowchart TD
+    subgraph Patient["Patient Kiosk / PWA"]
+        A[Language Selection] --> B[Consent & Profile]
+        B --> C[Voice / Text AI Intake]
+        C --> D[Structured Case Dossier]
+    end
 
-## Core invariant
+    subgraph AI["AI Acuity & Safety Layer"]
+        D --> E[Deterministic Red-Flag Check]
+        E --> F[Groq AI Pre-Triage Engine]
+        F --> G[P0 / P1 / P2 / P3 Acuity Proposal]
+    end
 
-The backend is the system of record and safety gate. The AI Engine supplies a versioned, explainable pre-triage recommendation. A Super Admin or designated human reviewer controls queue admission and may override the recommendation with an auditable reason. Doctors make the clinical decision.
+    subgraph AdminGate["Super Admin Review Gate"]
+        G --> H{Admin Approval Gate}
+        H -->|Approve / Override| I[Token Allocated & Priority Queue Admission]
+        H -->|P0 Emergency Escalate| J[Direct Emergency Room Transfer]
+    end
 
-## Documentation map
+    subgraph Doctor["Doctor Workstation"]
+        I --> K[Live Priority Queue: P1 ➔ P2 ➔ P3]
+        K --> L[Turn Call & Medical Consultation]
+        L --> M[Official Diagnosis & Digital Rx]
+    end
 
-| File | Purpose |
-| --- | --- |
-| `01-mvp-workflow.md` | End-to-end happy path and exception paths. |
-| `02-scope-and-non-goals.md` | MVP boundary and explicit non-goals. |
-| `03-roles-and-actors.md` | Human and system actors with authority boundaries. |
-| `04-ai-pre-triage.md` | P0-P3 semantics, uncertainty, safety, and AI output expectations. |
-| `05-queue-and-approval.md` | Queue allocation, approval gate, states, and ordering assumptions. |
-| `06-dashboards-and-records.md` | Doctor dashboard, patient dashboard, and records as evidence/context. |
-| `07-system-architecture.md` | Runtime boundaries and data flow. |
-| `08-integration-contracts.md` | Logical frontend/backend/AI contracts; exact routes remain TBD. |
-| `09-data-model.md` | Logical entities and ERD description; physical names remain TBD. |
-| `10-security-privacy.md` | Health-data handling assumptions and security requirements. |
-| `11-pwa-and-frontend-conventions.md` | PWA behavior, SCSS structure, and UI state conventions. |
-| `12-team-integration-workflow.md` | Ownership, pull-request workflow, and integration checklist. |
-| `13-old-to-new-for-harry.md` | Explicit migration note for the AI Engine work. |
-| `OPEN-DECISIONS.md` | Single list of unresolved decisions and suggested owners. |
+    subgraph Output["Patient Records"]
+        M --> N[Digital Prescription Released to Patient]
+        N --> O[Immutable Supabase Audit Trail]
+    end
+```
 
-## Update rule
+---
 
-When implementation settles a `TBD`, update the relevant document and `OPEN-DECISIONS.md` in the same pull request. If a decision changes a system boundary, update the Mermaid source as well. Do not leave the old flow in prompts or examples after changing the canonical contract.
+## 🔒 Absolute System Invariants
+
+1. **Non-Diagnostic AI Boundary:** The AI Engine (Groq LLaMA) **NEVER** issues medical diagnoses, prescriptions, drug dosages, or clinical certainties. It functions strictly as an intake structuring and triage advisory tool.
+2. **Clinical Ownership:** Final diagnoses, clinical prescriptions, laboratory orders, and care plans are exclusively authored and signed by registered medical doctors.
+3. **Super Admin Human-in-the-Loop Gate:** AI pre-triage assessments do not directly inject patients into the active Doctor queue. A Super Admin or Triage Nurse must review evidence, approve, or override priority before queue admittance.
+4. **Emergency Bypass (P0):** True red flags (e.g. crushing chest pain with diaphoresis, acute stroke symptoms, severe anaphylaxis) trigger immediate deterministic emergency alerts and bypass standard OPD queues.
+5. **Zero Invented Facts:** Unknown responses ("I don't know") are never defaulted to negative clinical answers ("No allergies"). Facts are extracted only from direct user statements.

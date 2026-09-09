@@ -1,0 +1,305 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MediKiosk Patient Intake",
+  "description": "Canonical structured representation of information collected by the MediKiosk AI intake assistant. This schema is for intake and clinician review, not diagnosis or treatment.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "patient_id",
+    "session_id",
+    "consent_status",
+    "intake_status",
+    "language",
+    "input_mode",
+    "chief_complaint",
+    "symptoms",
+    "medical_history",
+    "current_medications",
+    "allergies",
+    "previous_consultation",
+    "transcript_entries",
+    "missing_information",
+    "potential_safety_signals"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0"
+    },
+    "patient_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "session_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "consent_status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "accepted",
+        "declined"
+      ]
+    },
+    "intake_status": {
+      "type": "string",
+      "enum": [
+        "not_started",
+        "in_progress",
+        "paused",
+        "completed",
+        "cancelled",
+        "error"
+      ]
+    },
+    "language": {
+      "type": "string",
+      "enum": [
+        "en",
+        "hi",
+        "hinglish",
+        "mixed",
+        "unknown"
+      ]
+    },
+    "input_mode": {
+      "type": "string",
+      "enum": [
+        "text",
+        "voice",
+        "mixed"
+      ]
+    },
+    "chief_complaint": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "duration": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "onset": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        "sudden",
+        "gradual",
+        "unknown",
+        null
+      ]
+    },
+    "severity": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 10
+    },
+    "frequency": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "progression": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        "better",
+        "worse",
+        "same",
+        "unknown",
+        null
+      ]
+    },
+    "symptoms": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Relevant symptoms extracted from the conversation. Category-specific fields may be added here."
+    },
+    "medical_history": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "current_medications": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "allergies": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "previous_consultation": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "lifestyle": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "additional_concern": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "missing_information": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "field",
+          "reason",
+          "priority"
+        ],
+        "properties": {
+          "field": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "priority": {
+            "type": "string",
+            "enum": [
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        }
+      }
+    },
+    "potential_safety_signals": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "signal_id",
+          "evidence",
+          "requires_safety_evaluation"
+        ],
+        "properties": {
+          "signal_id": {
+            "type": "string"
+          },
+          "evidence": {
+            "type": "string"
+          },
+          "requires_safety_evaluation": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "transcript_entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "turn_id",
+          "speaker",
+          "input_mode",
+          "original_text",
+          "language"
+        ],
+        "properties": {
+          "turn_id": {
+            "type": "string"
+          },
+          "speaker": {
+            "type": "string",
+            "enum": [
+              "patient",
+              "assistant"
+            ]
+          },
+          "input_mode": {
+            "type": "string",
+            "enum": [
+              "text",
+              "voice"
+            ]
+          },
+          "original_text": {
+            "type": "string"
+          },
+          "normalized_text": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "language": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "stt_confidence": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0,
+            "maximum": 1
+          }
+        }
+      }
+    },
+    "documents": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "document_id",
+          "document_type",
+          "status"
+        ],
+        "properties": {
+          "document_id": {
+            "type": "string"
+          },
+          "document_type": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "uploaded",
+              "processing",
+              "processed",
+              "failed"
+            ]
+          }
+        }
+      }
+    }
+  }
+}

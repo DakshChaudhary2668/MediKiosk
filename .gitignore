@@ -4,6 +4,7 @@ __pycache__/
 *.pyc
 .venv/
 venv/
+env/
 
 # Environment
 .env
@@ -26,11 +27,5 @@ build/
 .DS_Store
 Thumbs.db
 
-# Logs
-*.log
-npm-debug.log*
-
-# Coverage
-coverage/
-.coverage
-htmlcov/
+# Supabase
+supabase/.temp/

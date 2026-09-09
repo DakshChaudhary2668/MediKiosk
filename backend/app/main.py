@@ -1,27 +1,31 @@
-"""MediKiosk FastAPI backend."""
+"""MediKiosk API — FastAPI entry point."""
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routers import auth, consultation, intake, queue, review
+from app.routers import auth, patient, intake, triage, queue
 
-app = FastAPI(title="MediKiosk API", version="0.1.0")
+app = FastAPI(
+    title="MediKiosk API",
+    description="AI-powered patient intake and clinical triage system",
+    version="0.2.0",
+)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # ponytail: tighten to env var for prod
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
-app.include_router(intake.router, prefix="/api/intake", tags=["intake"])
-app.include_router(review.router, prefix="/api/review", tags=["review"])
-app.include_router(queue.router, prefix="/api/queue", tags=["queue"])
-app.include_router(consultation.router, prefix="/api/consultation", tags=["consultation"])
+app.include_router(auth.router)
+app.include_router(patient.router)
+app.include_router(intake.router)
+app.include_router(triage.router)
+app.include_router(queue.router)
 
 
-@app.get("/api/health")
+@app.get("/health")
 def health():
-    return {"status": "ok"}
+    return {"status": "ok", "service": "medikiosk-api"}

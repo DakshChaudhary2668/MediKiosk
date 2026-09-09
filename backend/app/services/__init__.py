@@ -1,1 +1,1 @@
-# empty — makes services a package
+# services package

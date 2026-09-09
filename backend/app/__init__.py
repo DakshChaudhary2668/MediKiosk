@@ -1,1 +1,1 @@
-# empty — makes app a package
+# app package

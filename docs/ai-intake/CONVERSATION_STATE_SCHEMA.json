@@ -1,0 +1,155 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MediKiosk Conversation State",
+  "description": "Schema representing turn-by-turn conversation state of an active patient intake survey session.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "session_id",
+    "patient_id",
+    "conversation_status",
+    "language",
+    "input_mode",
+    "current_stage",
+    "completed_fields",
+    "pending_fields",
+    "skipped_fields",
+    "declined_fields",
+    "answers",
+    "turn_count",
+    "failed_attempts",
+    "created_at",
+    "updated_at",
+    "safety_handoff"
+  ],
+  "properties": {
+    "session_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "patient_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "conversation_status": {
+      "type": "string",
+      "enum": [
+        "not_started",
+        "in_progress",
+        "paused",
+        "completed",
+        "cancelled",
+        "error"
+      ]
+    },
+    "language": {
+      "type": "string",
+      "enum": [
+        "en",
+        "hi",
+        "hinglish",
+        "mixed",
+        "unknown"
+      ]
+    },
+    "input_mode": {
+      "type": "string",
+      "enum": [
+        "text",
+        "voice",
+        "mixed"
+      ]
+    },
+    "current_stage": {
+      "type": "string"
+    },
+    "current_question_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "completed_fields": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "pending_fields": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "skipped_fields": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "declined_fields": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "answers": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "last_patient_input": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "last_ai_question": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "turn_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "failed_attempts": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "created_at": {
+      "type": "string"
+    },
+    "updated_at": {
+      "type": "string"
+    },
+    "safety_handoff": {
+      "type": "object",
+      "required": [
+        "triggered",
+        "signal_ids",
+        "status"
+      ],
+      "properties": {
+        "triggered": {
+          "type": "boolean"
+        },
+        "signal_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "not_triggered",
+            "pending",
+            "sent_to_rules_engine",
+            "resolved"
+          ]
+        }
+      }
+    }
+  }
+}

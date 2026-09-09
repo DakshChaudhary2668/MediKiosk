@@ -1,0 +1,542 @@
+{
+  "version": "1.0",
+  "purpose": "Approved question bank for MediKiosk AI-guided patient intake. Questions collect information for clinician review and must not be used as diagnosis or treatment instructions.",
+  "usage_rules": [
+    "Ask one primary question at a time.",
+    "Prefer questions relevant to the patient's complaint and unanswered fields.",
+    "Do not ask every question in a category.",
+    "Never invent a question-specific patient answer.",
+    "Preserve the patient's original wording separately from normalized data.",
+    "Potential emergency signals are handed to the safety/rules engine; the AI intake agent does not make the final escalation decision.",
+    "If a patient refuses a question, record declined and continue when safe and appropriate.",
+    "Use simple language and match the patient's language where possible."
+  ],
+  "global_questions": [
+    {
+      "id": "consent_intro",
+      "category": "consent",
+      "question": "Is it okay if I ask you a few questions about your health before you see the doctor?",
+      "field": "consent_status",
+      "required": true,
+      "type": "boolean"
+    },
+    {
+      "id": "chief_complaint",
+      "category": "general",
+      "question": "What brings you here today?",
+      "field": "chief_complaint",
+      "required": true,
+      "type": "free_text"
+    },
+    {
+      "id": "duration",
+      "category": "general",
+      "question": "How long have you been experiencing this?",
+      "field": "duration",
+      "required": true,
+      "type": "free_text"
+    },
+    {
+      "id": "onset",
+      "category": "general",
+      "question": "Did it start suddenly or gradually?",
+      "field": "onset",
+      "required": false,
+      "type": "enum",
+      "options": [
+        "sudden",
+        "gradual",
+        "unknown"
+      ]
+    },
+    {
+      "id": "severity",
+      "category": "general",
+      "question": "How severe is it from 0 to 10?",
+      "field": "severity",
+      "required": false,
+      "type": "integer",
+      "range": [
+        0,
+        10
+      ]
+    },
+    {
+      "id": "frequency",
+      "category": "general",
+      "question": "How often does this happen?",
+      "field": "frequency",
+      "required": false,
+      "type": "free_text"
+    },
+    {
+      "id": "progression",
+      "category": "general",
+      "question": "Is it getting better, getting worse, or staying about the same?",
+      "field": "progression",
+      "required": false,
+      "type": "enum",
+      "options": [
+        "better",
+        "worse",
+        "same",
+        "unknown"
+      ]
+    },
+    {
+      "id": "relevant_history",
+      "category": "history",
+      "question": "Do you have any existing medical conditions that may be relevant?",
+      "field": "medical_history",
+      "required": false,
+      "type": "list"
+    },
+    {
+      "id": "medications",
+      "category": "medications",
+      "question": "Are you currently taking any regular medicines or supplements?",
+      "field": "current_medications",
+      "required": false,
+      "type": "list"
+    },
+    {
+      "id": "allergies",
+      "category": "allergies",
+      "question": "Do you have any known medicine, food, or other allergies?",
+      "field": "allergies",
+      "required": false,
+      "type": "list"
+    },
+    {
+      "id": "previous_consultation",
+      "category": "history",
+      "question": "Have you already seen a doctor or received any treatment for this problem?",
+      "field": "previous_consultation",
+      "required": false,
+      "type": "free_text"
+    },
+    {
+      "id": "additional_concern",
+      "category": "general",
+      "question": "Is there anything else about this problem that you think the doctor should know?",
+      "field": "additional_concern",
+      "required": false,
+      "type": "free_text"
+    }
+  ],
+  "categories": {
+    "respiratory": {
+      "description": "Use when the main complaint involves cough, breathing, congestion, wheezing, or related respiratory symptoms.",
+      "questions": [
+        {
+          "id": "resp_cough",
+          "question": "Do you have a cough?",
+          "field": "symptoms.cough",
+          "type": "boolean"
+        },
+        {
+          "id": "resp_cough_duration",
+          "question": "How long have you had the cough?",
+          "field": "symptoms.cough_duration",
+          "type": "free_text"
+        },
+        {
+          "id": "resp_cough_type",
+          "question": "Is the cough dry or does it bring up mucus?",
+          "field": "symptoms.cough_type",
+          "type": "enum",
+          "options": [
+            "dry",
+            "mucus",
+            "unknown"
+          ]
+        },
+        {
+          "id": "resp_breathing",
+          "question": "Are you having any difficulty breathing?",
+          "field": "symptoms.breathing_difficulty",
+          "type": "boolean"
+        },
+        {
+          "id": "resp_wheeze",
+          "question": "Have you noticed wheezing or a whistling sound when breathing?",
+          "field": "symptoms.wheezing",
+          "type": "boolean"
+        },
+        {
+          "id": "resp_fever",
+          "question": "Have you had a fever or felt unusually hot or cold?",
+          "field": "symptoms.fever",
+          "type": "boolean"
+        },
+        {
+          "id": "resp_sputum",
+          "question": "If you are bringing up mucus, what does it look like?",
+          "field": "symptoms.sputum_description",
+          "type": "free_text"
+        }
+      ]
+    },
+    "chest": {
+      "description": "Use when the patient reports chest pain, pressure, tightness, or discomfort.",
+      "questions": [
+        {
+          "id": "chest_location",
+          "question": "Where exactly do you feel the chest discomfort?",
+          "field": "symptoms.chest_pain.location",
+          "type": "free_text"
+        },
+        {
+          "id": "chest_character",
+          "question": "How would you describe the discomfort, such as pressure, tightness, burning, or pain?",
+          "field": "symptoms.chest_pain.character",
+          "type": "free_text"
+        },
+        {
+          "id": "chest_duration",
+          "question": "How long does each episode of chest discomfort last?",
+          "field": "symptoms.chest_pain.episode_duration",
+          "type": "free_text"
+        },
+        {
+          "id": "chest_exertion",
+          "question": "Does it happen or get worse with physical activity?",
+          "field": "symptoms.chest_pain.exertional",
+          "type": "boolean"
+        },
+        {
+          "id": "chest_breathing",
+          "question": "Do you have any difficulty breathing along with the chest discomfort?",
+          "field": "symptoms.chest_pain.associated_breathing_difficulty",
+          "type": "boolean"
+        },
+        {
+          "id": "chest_dizziness",
+          "question": "Have you felt dizzy, faint, or unusually weak with it?",
+          "field": "symptoms.chest_pain.associated_dizziness",
+          "type": "boolean"
+        },
+        {
+          "id": "chest_radiation",
+          "question": "Does the discomfort spread to another area, such as your arm, shoulder, back, neck, or jaw?",
+          "field": "symptoms.chest_pain.radiation",
+          "type": "free_text"
+        }
+      ]
+    },
+    "fever": {
+      "description": "Use when fever or elevated temperature is a main concern.",
+      "questions": [
+        {
+          "id": "fever_duration",
+          "question": "How long have you had the fever or feverish feeling?",
+          "field": "symptoms.fever.duration",
+          "type": "free_text"
+        },
+        {
+          "id": "fever_temperature",
+          "question": "If you measured your temperature, what was the highest reading?",
+          "field": "symptoms.fever.temperature",
+          "type": "free_text"
+        },
+        {
+          "id": "fever_chills",
+          "question": "Have you had chills or shivering?",
+          "field": "symptoms.fever.chills",
+          "type": "boolean"
+        },
+        {
+          "id": "fever_associated",
+          "question": "What other symptoms are happening with the fever?",
+          "field": "symptoms.fever.associated_symptoms",
+          "type": "list"
+        }
+      ]
+    },
+    "gastrointestinal": {
+      "description": "Use for abdominal pain, nausea, vomiting, diarrhea, constipation, or related complaints.",
+      "questions": [
+        {
+          "id": "gi_location",
+          "question": "Where in your abdomen do you feel the problem?",
+          "field": "symptoms.abdominal.location",
+          "type": "free_text"
+        },
+        {
+          "id": "gi_pain_character",
+          "question": "How would you describe the abdominal pain?",
+          "field": "symptoms.abdominal.character",
+          "type": "free_text"
+        },
+        {
+          "id": "gi_nausea",
+          "question": "Are you feeling nauseated?",
+          "field": "symptoms.nausea",
+          "type": "boolean"
+        },
+        {
+          "id": "gi_vomiting",
+          "question": "Have you been vomiting?",
+          "field": "symptoms.vomiting",
+          "type": "boolean"
+        },
+        {
+          "id": "gi_diarrhea",
+          "question": "Have you had loose or watery stools?",
+          "field": "symptoms.diarrhea",
+          "type": "boolean"
+        },
+        {
+          "id": "gi_constipation",
+          "question": "Have you been having difficulty passing stool?",
+          "field": "symptoms.constipation",
+          "type": "boolean"
+        },
+        {
+          "id": "gi_appetite",
+          "question": "Have you noticed any change in your appetite?",
+          "field": "symptoms.appetite_change",
+          "type": "boolean"
+        }
+      ]
+    },
+    "headache_neurological": {
+      "description": "Use for headache, dizziness, weakness, numbness, or other neurological complaints.",
+      "questions": [
+        {
+          "id": "neuro_location",
+          "question": "Where do you feel the headache or other discomfort?",
+          "field": "symptoms.headache.location",
+          "type": "free_text"
+        },
+        {
+          "id": "neuro_onset",
+          "question": "Did the headache or symptom begin suddenly or gradually?",
+          "field": "symptoms.headache.onset",
+          "type": "enum",
+          "options": [
+            "sudden",
+            "gradual",
+            "unknown"
+          ]
+        },
+        {
+          "id": "neuro_dizziness",
+          "question": "Have you been feeling dizzy or off balance?",
+          "field": "symptoms.dizziness",
+          "type": "boolean"
+        },
+        {
+          "id": "neuro_vision",
+          "question": "Have you noticed any new changes in your vision?",
+          "field": "symptoms.vision_change",
+          "type": "boolean"
+        },
+        {
+          "id": "neuro_weakness",
+          "question": "Have you noticed any new weakness or numbness?",
+          "field": "symptoms.weakness_or_numbness",
+          "type": "boolean"
+        },
+        {
+          "id": "neuro_speech",
+          "question": "Have you noticed any new difficulty speaking or understanding speech?",
+          "field": "symptoms.speech_difficulty",
+          "type": "boolean"
+        }
+      ]
+    },
+    "musculoskeletal": {
+      "description": "Use for joint, muscle, bone, back, neck, or injury-related complaints.",
+      "questions": [
+        {
+          "id": "msk_location",
+          "question": "Where exactly is the pain or discomfort?",
+          "field": "symptoms.musculoskeletal.location",
+          "type": "free_text"
+        },
+        {
+          "id": "msk_injury",
+          "question": "Did this start after an injury, fall, or accident?",
+          "field": "symptoms.musculoskeletal.injury",
+          "type": "boolean"
+        },
+        {
+          "id": "msk_swelling",
+          "question": "Is there any swelling in the area?",
+          "field": "symptoms.musculoskeletal.swelling",
+          "type": "boolean"
+        },
+        {
+          "id": "msk_movement",
+          "question": "Does movement make it worse or limit your movement?",
+          "field": "symptoms.musculoskeletal.movement_limitation",
+          "type": "boolean"
+        },
+        {
+          "id": "msk_function",
+          "question": "Is it affecting your ability to walk, use the limb, or perform normal activities?",
+          "field": "symptoms.musculoskeletal.functional_impact",
+          "type": "free_text"
+        }
+      ]
+    },
+    "urinary": {
+      "description": "Use for urinary discomfort, frequency, changes in urination, or related complaints.",
+      "questions": [
+        {
+          "id": "urinary_pain",
+          "question": "Do you have pain or burning when urinating?",
+          "field": "symptoms.urinary.pain_or_burning",
+          "type": "boolean"
+        },
+        {
+          "id": "urinary_frequency",
+          "question": "Have you been urinating more often than usual?",
+          "field": "symptoms.urinary.frequency_change",
+          "type": "boolean"
+        },
+        {
+          "id": "urinary_blood",
+          "question": "Have you noticed any blood or an unusual change in the urine?",
+          "field": "symptoms.urinary.urine_change",
+          "type": "boolean_or_text"
+        },
+        {
+          "id": "urinary_pain_location",
+          "question": "Are you having pain in your lower abdomen, side, or back along with the urinary symptoms?",
+          "field": "symptoms.urinary.associated_pain",
+          "type": "free_text"
+        }
+      ]
+    },
+    "skin": {
+      "description": "Use for rash, itching, skin lesions, swelling, or skin changes.",
+      "questions": [
+        {
+          "id": "skin_location",
+          "question": "Where on your body is the skin change?",
+          "field": "symptoms.skin.location",
+          "type": "free_text"
+        },
+        {
+          "id": "skin_onset",
+          "question": "When did you first notice it?",
+          "field": "symptoms.skin.onset",
+          "type": "free_text"
+        },
+        {
+          "id": "skin_itch",
+          "question": "Is it itchy, painful, or neither?",
+          "field": "symptoms.skin.sensation",
+          "type": "free_text"
+        },
+        {
+          "id": "skin_spread",
+          "question": "Has it been spreading or changing?",
+          "field": "symptoms.skin.progression",
+          "type": "free_text"
+        },
+        {
+          "id": "skin_new_exposure",
+          "question": "Have you used any new medicine, food, product, or substance around the time it started?",
+          "field": "symptoms.skin.new_exposure",
+          "type": "free_text"
+        }
+      ]
+    },
+    "general_health": {
+      "description": "Use when the complaint is vague or includes fatigue, weakness, or general symptoms.",
+      "questions": [
+        {
+          "id": "general_fatigue",
+          "question": "Have you been feeling unusually tired or weak?",
+          "field": "symptoms.fatigue",
+          "type": "boolean"
+        },
+        {
+          "id": "general_weight",
+          "question": "Have you noticed an unexpected change in your weight recently?",
+          "field": "symptoms.weight_change",
+          "type": "boolean"
+        },
+        {
+          "id": "general_sleep",
+          "question": "Have your symptoms been affecting your sleep?",
+          "field": "symptoms.sleep_impact",
+          "type": "boolean"
+        },
+        {
+          "id": "general_daily_activity",
+          "question": "Are these symptoms affecting your usual daily activities?",
+          "field": "symptoms.daily_activity_impact",
+          "type": "free_text"
+        }
+      ]
+    }
+  },
+  "safety_signal_topics": [
+    {
+      "signal_id": "possible_severe_breathing_problem",
+      "topics": [
+        "severe breathing difficulty",
+        "unable to breathe normally"
+      ],
+      "action": "Send signal to deterministic safety/rules engine immediately."
+    },
+    {
+      "signal_id": "possible_acute_chest_emergency",
+      "topics": [
+        "severe chest pain",
+        "chest pressure",
+        "chest discomfort with concerning associated symptoms"
+      ],
+      "action": "Send signal to deterministic safety/rules engine immediately."
+    },
+    {
+      "signal_id": "possible_acute_neurological_event",
+      "topics": [
+        "new weakness",
+        "new numbness",
+        "new speech difficulty",
+        "new major vision change",
+        "sudden severe neurological symptom"
+      ],
+      "action": "Send signal to deterministic safety/rules engine immediately."
+    },
+    {
+      "signal_id": "possible_severe_acute_condition",
+      "topics": [
+        "fainting",
+        "loss of consciousness",
+        "severe sudden symptoms",
+        "rapid deterioration"
+      ],
+      "action": "Send signal to deterministic safety/rules engine immediately."
+    }
+  ],
+  "question_selection_policy": {
+    "priority_order": [
+      "Consent and patient safety",
+      "Chief complaint",
+      "Information needed to understand the complaint",
+      "Potential safety signals",
+      "Relevant associated symptoms",
+      "Medical history",
+      "Current medications",
+      "Allergies",
+      "Previous relevant consultation",
+      "Additional concern"
+    ],
+    "selection_logic": [
+      "First use information already provided by the patient.",
+      "Identify the complaint category or categories.",
+      "Check required fields that remain missing.",
+      "Check relevant category questions that remain unanswered.",
+      "Prefer the question that reduces the most important information gap.",
+      "Do not ask irrelevant category questions.",
+      "If a potential safety signal is detected, stop normal questioning and hand the signal to the safety/rules engine.",
+      "Do not let the LLM invent clinical rules."
+    ]
+  }
+}
