@@ -1,58 +1,71 @@
+// MediKiosk — Intake Chat Interface
+// Clean, calm, clinical chat styling
+
 .chatPage {
   display: flex;
   flex-direction: column;
   height: 100vh;
   height: 100dvh;
-  max-width: 480px;
+  max-width: 520px;
   margin: 0 auto;
-  background: var(--color-surface);
+  background: var(--mk-surface);
+  border-left: 1px solid var(--mk-border);
+  border-right: 1px solid var(--mk-border);
 }
 
 .header {
   display: flex;
   align-items: center;
-  gap: var(--space-md);
-  padding: var(--space-md);
-  border-bottom: 1px solid var(--color-border);
-  background: var(--color-surface);
+  gap: 12px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--mk-border);
+  background: var(--mk-surface);
 
   div {
     display: flex;
     flex-direction: column;
-    strong { font-size: 0.9375rem; }
+    strong {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--mk-navy);
+    }
   }
 }
 
 .backBtn {
   background: none;
-  border: none;
-  color: var(--color-primary);
-  font-size: 0.875rem;
+  border: 1px solid var(--mk-border);
+  color: var(--mk-text);
+  font-size: 12px;
+  font-weight: 500;
   cursor: pointer;
-  padding: var(--space-xs) var(--space-sm);
-  border-radius: var(--radius-sm);
-  &:hover { background: var(--color-bg); }
+  padding: 4px 10px;
+  border-radius: var(--mk-radius-xs);
+  transition: background var(--mk-dur);
+  &:hover { background: var(--mk-surface-subtle); }
 }
 
 .statusBadge {
-  font-size: 0.6875rem;
+  font-size: 11px;
   font-weight: 600;
-  padding: 0.125rem 0.375rem;
-  border-radius: var(--radius-full);
+  padding: 2px 6px;
+  border-radius: var(--mk-radius-xs);
+  margin-top: 2px;
+  display: inline-block;
 
-  &[data-status="active"] { color: var(--color-warning); background: rgba(245, 158, 11, 0.1); }
-  &[data-status="completed"] { color: var(--color-success); background: rgba(34, 197, 94, 0.1); }
-  &[data-status="red_flagged"] { color: var(--color-danger); background: rgba(239, 68, 68, 0.1); }
+  &[data-status="active"] { color: var(--mk-primary); background: var(--mk-primary-soft); border: 1px solid #DBEAFE; }
+  &[data-status="completed"] { color: var(--mk-success); background: var(--mk-success-soft); border: 1px solid #A7F3D0; }
+  &[data-status="red_flagged"] { color: var(--mk-danger); background: var(--mk-danger-soft); border: 1px solid #FECACA; }
 }
 
 .messages {
   flex: 1;
   overflow-y: auto;
-  padding: var(--space-md);
+  padding: 18px;
   display: flex;
   flex-direction: column;
-  gap: var(--space-sm);
-  background: var(--color-bg);
+  gap: 12px;
+  background: var(--mk-canvas);
 }
 
 .message {
@@ -62,36 +75,38 @@
   &.patient {
     align-self: flex-end;
     .bubble {
-      background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
-      color: white;
-      border-radius: var(--radius-lg) var(--radius-lg) var(--radius-sm) var(--radius-lg);
+      background: var(--mk-navy);
+      color: #FFFFFF;
+      border-radius: 10px 10px 2px 10px;
     }
   }
 
   &.assistant {
     align-self: flex-start;
     .bubble {
-      background: var(--color-surface);
-      color: var(--color-text);
-      border: 1px solid var(--color-border);
-      border-radius: var(--radius-lg) var(--radius-lg) var(--radius-lg) var(--radius-sm);
+      background: var(--mk-surface);
+      color: var(--mk-text);
+      border: 1px solid var(--mk-border);
+      border-radius: 10px 10px 10px 2px;
     }
   }
 }
 
 .bubble {
-  padding: 0.625rem 0.875rem;
-  font-size: 0.9375rem;
+  padding: 10px 14px;
+  font-size: 13px;
   line-height: 1.5;
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--mk-shadow-xs);
   word-break: break-word;
 }
 
 .voiceTag {
-  display: inline-block;
-  font-size: 0.6875rem;
-  opacity: 0.7;
-  margin-left: var(--space-xs);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  opacity: 0.8;
+  margin-top: 4px;
 }
 
 .typing {
@@ -100,10 +115,10 @@
   padding: 4px 0;
 
   span {
-    width: 8px;
-    height: 8px;
+    width: 6px;
+    height: 6px;
     border-radius: 50%;
-    background: var(--color-text-muted);
+    background: var(--mk-text-muted);
     animation: typingBounce 1.2s ease-in-out infinite;
 
     &:nth-child(2) { animation-delay: 0.2s; }
@@ -113,137 +128,119 @@
 
 @keyframes typingBounce {
   0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
-  30% { transform: translateY(-6px); opacity: 1; }
+  30% { transform: translateY(-4px); opacity: 1; }
 }
 
 .inputArea {
-  border-top: 1px solid var(--color-border);
-  background: var(--color-surface);
-  padding: var(--space-sm);
+  border-top: 1px solid var(--mk-border);
+  background: var(--mk-surface);
+  padding: 12px 16px;
 }
 
 .inputRow {
   display: flex;
-  gap: var(--space-xs);
+  gap: 8px;
   align-items: center;
 }
 
 .textInput {
   flex: 1;
-  padding: 0.625rem 0.875rem;
-  border: 2px solid var(--color-border);
-  border-radius: var(--radius-full);
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--mk-border);
+  border-radius: var(--mk-radius-sm);
   font-family: inherit;
-  font-size: 0.9375rem;
+  font-size: 13px;
+  color: var(--mk-text);
+  background: var(--mk-surface);
   outline: none;
-  transition: border-color var(--transition);
+  transition: border-color var(--mk-dur);
 
-  &:focus { border-color: var(--color-primary); }
+  &:focus { border-color: var(--mk-primary); }
   &:disabled { opacity: 0.5; }
 }
 
 .voiceBtn {
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  border: 2px solid var(--color-border);
-  background: var(--color-surface);
-  font-size: 1.25rem;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--mk-radius-sm);
+  border: 1px solid var(--mk-border);
+  background: var(--mk-surface);
+  color: var(--mk-navy);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
-  transition: all var(--transition);
+  transition: background var(--mk-dur), border-color var(--mk-dur);
   flex-shrink: 0;
 
   &:hover:not(:disabled) {
-    border-color: var(--color-primary);
-    background: var(--color-bg);
+    background: var(--mk-surface-subtle);
+    border-color: var(--mk-border-strong);
   }
 
   &:disabled { opacity: 0.4; cursor: not-allowed; }
 
   &.recording {
-    border-color: var(--color-danger);
-    background: rgba(239, 68, 68, 0.1);
-    animation: pulse 1.5s ease-in-out infinite;
+    border-color: var(--mk-danger);
+    background: var(--mk-danger-soft);
+    color: var(--mk-danger);
   }
 }
 
-@keyframes pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.3); }
-  50% { box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); }
-}
-
 .sendBtn {
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--mk-radius-sm);
   border: none;
-  background: var(--color-primary);
+  background: var(--mk-primary);
   color: white;
-  font-size: 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
-  transition: all var(--transition);
+  transition: background var(--mk-dur);
   flex-shrink: 0;
 
   &:hover:not(:disabled) {
-    background: var(--color-primary-dark);
-    transform: scale(1.05);
+    background: var(--mk-primary-hover);
   }
 
   &:disabled { opacity: 0.4; cursor: not-allowed; }
 }
 
-.completeBtn {
-  display: block;
-  width: 100%;
-  margin-top: var(--space-xs);
-  padding: var(--space-sm);
-  background: none;
-  border: 1px dashed var(--color-border);
-  border-radius: var(--radius-md);
-  color: var(--color-text-secondary);
-  font-size: 0.8125rem;
-  cursor: pointer;
-  transition: all var(--transition);
-
-  &:hover {
-    border-color: var(--color-primary);
-    color: var(--color-primary);
-  }
-}
-
 .caseCard {
-  margin: var(--space-sm);
-  padding: var(--space-lg);
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-md);
+  margin: 12px 16px;
+  padding: 16px;
+  background: var(--mk-surface-subtle);
+  border: 1px solid var(--mk-border);
+  border-radius: var(--mk-radius-sm);
 
   h3 {
-    font-size: 1rem;
-    color: var(--color-success);
-    margin-bottom: var(--space-md);
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--mk-navy);
+    margin-bottom: 12px;
   }
 }
 
 .caseGrid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: var(--space-sm);
+  gap: 8px 14px;
 
   div {
     label {
       display: block;
-      font-size: 0.6875rem;
+      font-size: 11px;
       font-weight: 600;
-      color: var(--color-text-muted);
+      color: var(--mk-text-muted);
       text-transform: uppercase;
-      letter-spacing: 0.5px;
-      margin-bottom: 2px;
     }
     span {
-      font-size: 0.875rem;
+      font-size: 13px;
       font-weight: 500;
+      color: var(--mk-text);
     }
   }
 }

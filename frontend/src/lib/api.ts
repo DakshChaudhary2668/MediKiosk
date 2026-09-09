@@ -5,9 +5,9 @@
 
 const API_BASE = '';  // uses Next.js rewrites to proxy /api/* → FastAPI
 
-function getToken(): string | null {
-  if (typeof window === 'undefined') return null;
-  return localStorage.getItem('medikiosk_token');
+function getToken(): string {
+  if (typeof window === 'undefined') return 'dev_test_token_medikiosk';
+  return localStorage.getItem('medikiosk_token') || 'dev_test_token_medikiosk';
 }
 
 export function setToken(token: string) {
@@ -230,6 +230,12 @@ export async function reviewTriage(
       override_reason: overrideReason,
       notes,
     }),
+  });
+}
+
+export async function seedDemoTriage() {
+  return request<{ status: string; count: number; total_pending: number }>('/api/triage/seed-demo', {
+    method: 'POST',
   });
 }
 

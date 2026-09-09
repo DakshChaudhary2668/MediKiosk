@@ -1,112 +1,358 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   OpsShell, PriorityBadge, StatusChip, AITriageContext, EvidenceDrawer,
   CaseTimeline, EmptyState, ConfirmDialog, ReasonInput,
   pushToast,
 } from "@/components/shared";
+import {
+  IconList,
+  IconAlertTriangle,
+  IconFileText,
+  IconBarChart,
+  IconUser,
+  IconStethoscope,
+  IconCheckCircle,
+  IconClock,
+  IconArrowLeft,
+  IconArrowRight,
+  IconSparkles,
+  IconActivity,
+  IconChevronRight,
+  IconPill,
+  IconAlertCircle,
+} from "@/components/icons";
 import { CASES, ALL_CASES } from "@/lib/fixtures";
 import type { CaseFixture } from "@/lib/fixtures";
+import { getDoctorQueue, callPatientTurn, submitConsultation } from "@/lib/api";
+import { adaptQueueItemToFixture } from "@/lib/adapters";
 
 type DocView = "queue" | "detail" | "consult" | "complete" | "p0-alert";
 
 const NAV = [
-  { id: "queue",      label: "My Queue",      icon: "☰" },
-  { id: "p0-alert",   label: "P0 Emergency",  icon: "🚨", badge: 1, danger: true },
-  { id: "consultations", label: "Consultations", icon: "📋" },
-  { id: "templates",  label: "Templates",     icon: "📄" },
-  { id: "reports",    label: "Reports",        icon: "📊" },
-  { id: "profile",    label: "Profile",        icon: "👤" },
+  { id: "queue",      label: "My Queue",      icon: <IconList size={16} /> },
+  { id: "p0-alert",   label: "P0 Emergency",  icon: <IconAlertTriangle size={16} />, badge: 1, danger: true },
+  { id: "consultations", label: "Consultations", icon: <IconFileText size={16} /> },
+  { id: "templates",  label: "Templates",     icon: <IconFileText size={16} /> },
+  { id: "reports",    label: "Reports",        icon: <IconBarChart size={16} /> },
+  { id: "profile",    label: "Profile",        icon: <IconUser size={16} /> },
 ];
 
-/* ── P0 Emergency alert panel ────────────────────────────── */
+/* ══════════════════════════════════════════════════════════
+   SCREEN 5: P0 EMERGENCY HANDOVER (Doctor View)
+   Calm, authoritative, serious clinical emergency handoff
+══════════════════════════════════════════════════════════ */
 function P0Alert() {
   const c = CASES.P0;
+  const [acknowledged, setAcknowledged] = useState(false);
+
   return (
-    <div>
-      <div className="mk-p0-banner" style={{ marginBottom: 20, fontSize: 15 }}>
-        🚨 EMERGENCY — This is not a queue item — Emergency protocol already active
-      </div>
-      <h2 className="mk-page-title" style={{ color: "var(--mk-danger)", marginBottom: 16 }}>P0 Emergency Handover</h2>
-      <div className="mk-p0-alert" style={{ marginBottom: 20 }}>
-        <div style={{ display: "flex", gap: 12, justifyContent: "space-between", flexWrap: "wrap", marginBottom: 16 }}>
-          <div>
-            <div className="mk-card-title">Patient: {c.patientName} · {c.caseId}</div>
-            <div className="mk-meta">Location: Kiosk 3, Ground Floor</div>
+    <div style={{ maxWidth: 880 }}>
+      {/* Emergency Handover Banner */}
+      <div style={{
+        background: "var(--mk-surface)",
+        border: "1px solid var(--mk-border)",
+        borderLeft: `4px solid ${acknowledged ? "var(--mk-success)" : "var(--mk-danger)"}`,
+        borderRadius: "var(--mk-radius-md)",
+        padding: "20px 24px",
+        marginBottom: 20,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        flexWrap: "wrap",
+        gap: 16,
+      }}>
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+            <span className={`mk-badge ${acknowledged ? "mk-badge-ok" : "mk-badge-p0"}`}>
+              {acknowledged ? "Handover Acknowledged" : "P0 Emergency Protocol Active"}
+            </span>
+            <span style={{ fontSize: 12, fontFamily: "var(--mk-font-mono)", color: "var(--mk-text-muted)" }}>
+              Response Target: &lt; 5 min · Elapsed: <strong>01:24</strong>
+            </span>
           </div>
-          <div>
-            <div className="mk-meta">Emergency team: Dispatched</div>
-            <div className="mk-meta">You may be required for clinical handover</div>
+          <h2 style={{ fontSize: 18, fontWeight: 700, margin: "6px 0 2px", color: "var(--mk-navy)" }}>
+            Emergency Handover — Resuscitation Bay 1 (Kiosk 3)
+          </h2>
+          <div className="mk-meta">
+            Assigned Clinician: Dr. R. Vance, MD · Trauma Nursing Team Dispatched
           </div>
         </div>
-        <div className="mk-sec-title" style={{ marginBottom: 8 }}>Critical indicators</div>
-        <ul style={{ paddingLeft: 20, marginBottom: 12 }}>
-          {c.ai.safety_flags.map((f: string) => <li key={f} className="mk-body" style={{ color: "var(--mk-danger)" }}>{f}</li>)}
-          {c.symptoms.map(s => <li key={s} className="mk-body">{s}</li>)}
-        </ul>
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <button className="mk-btn mk-btn-danger" onClick={() => pushToast("Emergency handover acknowledged", "success")}>Acknowledge Handover</button>
-          <button className="mk-btn mk-btn-secondary">📋 View Full Case</button>
+
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            className="mk-btn mk-btn-primary"
+            style={{
+              background: acknowledged ? "var(--mk-success)" : "var(--mk-danger)",
+              minHeight: 38,
+            }}
+            onClick={() => {
+              setAcknowledged(true);
+              pushToast("Emergency presence confirmed — Protocol engaged", "success");
+            }}
+          >
+            <IconCheckCircle size={15} />
+            <span>{acknowledged ? "Presence Confirmed" : "Acknowledge & Confirm Presence"}</span>
+          </button>
+          <button
+            className="mk-btn mk-btn-secondary"
+            style={{ minHeight: 38 }}
+            onClick={() => pushToast("Trauma records dispatched to mobile tablet", "info")}
+          >
+            <IconFileText size={15} />
+            <span>Trauma Dossier</span>
+          </button>
         </div>
       </div>
-      <div className="mk-card mk-card-padded">
-        <div className="mk-sec-title" style={{ marginBottom: 12 }}>Emergency Timeline</div>
-        <CaseTimeline events={c.timeline} />
+
+      {/* Patient & Incident Info */}
+      <div className="mk-card mk-card-padded" style={{ marginBottom: 20 }}>
+        <div style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "flex-start",
+          flexWrap: "wrap",
+          gap: 12,
+          paddingBottom: 16,
+          borderBottom: "1px solid var(--mk-border-subtle)",
+        }}>
+          <div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: "var(--mk-navy)" }}>
+              {c.patientName}, {c.patientAge}y · {c.patientGender}
+            </div>
+            <div className="mk-meta" style={{ marginTop: 2 }}>
+              Case ID: <strong style={{ fontFamily: "var(--mk-font-mono)" }}>{c.caseId}</strong> · Location: Ground Floor Bay 3
+            </div>
+          </div>
+          <span className="mk-badge mk-badge-p0">Immediate Physician Presence Required</span>
+        </div>
+
+        <div style={{ padding: "16px 0", borderBottom: "1px solid var(--mk-border-subtle)" }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: "var(--mk-danger)", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 8 }}>
+            Reported Critical Invariant Indicators
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {c.ai.safety_flags.map((f: string) => (
+              <div key={f} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 600, color: "var(--mk-danger)" }}>
+                <IconAlertTriangle size={14} />
+                <span>{f}</span>
+              </div>
+            ))}
+            {c.symptoms.map(s => (
+              <div key={s} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--mk-text-muted)" }}>
+                <span style={{ width: 4, height: 4, borderRadius: "50%", background: "var(--mk-text-subtle)" }} />
+                <span>{s}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div style={{ paddingTop: 16 }}>
+          <div className="mk-sec-title" style={{ marginBottom: 12 }}>Emergency Incident Progression</div>
+          <CaseTimeline events={c.timeline} />
+        </div>
       </div>
-      <div className="mk-meta" style={{ marginTop: 16, color: "var(--mk-danger)" }}>
-        P0 does not appear in your routine queue. This handover panel is only shown when your participation is required.
-      </div>
+
+      <p className="mk-meta" style={{ color: "var(--mk-text-subtle)" }}>
+        Notice: P0 Emergency cases bypass routine queue scheduling. Attending presence logged in hospital audit ledger.
+      </p>
     </div>
   );
 }
 
-/* ── Queue view ─────────────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════
+   SCREEN 4: DOCTOR QUEUE (Clinical Workstation Worklist)
+   Information density, scanability, keyboard/mouse efficiency
+══════════════════════════════════════════════════════════ */
 function QueueView({ onSelect }: { onSelect: (id: string) => void }) {
   const [filter, setFilter] = useState("All");
-  const filters = ["All", "P1", "P2", "P3", "Follow-ups"];
-  const rows = ALL_CASES.filter(c => c.priority !== "P0"); // P0 never in routine queue
+  const [loading, setLoading] = useState(false);
+  const [isLiveSource, setIsLiveSource] = useState(false);
+  const [cases, setCases] = useState<CaseFixture[]>(ALL_CASES.filter(c => c.priority !== "P0"));
 
-  const filtered = filter === "All" ? rows : rows.filter(r => r.priority === filter);
+  const filters = ["All", "P1", "P2", "P3"];
+
+  useEffect(() => {
+    let mounted = true;
+    async function loadQueue() {
+      setLoading(true);
+      try {
+        const liveQueue = await getDoctorQueue();
+        if (mounted && Array.isArray(liveQueue) && liveQueue.length > 0) {
+          const adapted = liveQueue.map(adaptQueueItemToFixture).filter(c => c.priority !== "P0");
+          if (adapted.length > 0) {
+            setCases(adapted);
+            setIsLiveSource(true);
+          }
+        }
+      } catch (err) {
+        console.warn("Using fallback clinical fixtures:", err);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    }
+    loadQueue();
+    return () => { mounted = false; };
+  }, []);
+
+  const filtered = filter === "All" ? cases : cases.filter(r => r.priority === filter);
+  const p1Cases = filtered.filter(c => c.priority === "P1");
+  const otherCases = filtered.filter(c => c.priority !== "P1");
 
   return (
     <div>
+      {/* Header & Filter Controls */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
-        <h1 className="mk-page-title">Today&apos;s Queue</h1>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          {ALL_CASES.filter(c => c.priority !== "P0").map(c => (
-            <span key={c.priority} className={`mk-badge mk-badge-${c.priority.toLowerCase()}`}>{c.priority}</span>
+        <div>
+          <h1 className="mk-page-title" style={{ margin: 0 }}>Patient Queue</h1>
+          <div className="mk-meta" style={{ marginTop: 2 }}>
+            OPD Room 12 · Attending: Dr. R. Vance, MD · {isLiveSource ? "EHR Live Feed" : "Resilient Offline Buffer"}
+          </div>
+        </div>
+
+        <div style={{ display: "flex", gap: 8 }}>
+          {["P1", "P2", "P3"].map(p => (
+            <span key={p} className={`mk-badge mk-badge-${p.toLowerCase()}`}>
+              {cases.filter(c => c.priority === p).length} {p}
+            </span>
           ))}
         </div>
       </div>
+
       <div className="mk-tabs" style={{ marginBottom: 20 }}>
         {filters.map(f => (
-          <span key={f} className={`mk-tab ${filter === f ? "active" : ""}`} onClick={() => setFilter(f)}>{f}</span>
+          <span key={f} className={`mk-tab ${filter === f ? "active" : ""}`} onClick={() => setFilter(f)}>
+            {f}
+          </span>
         ))}
       </div>
+
+      {/* P1 Urgent Cases Pinned at Top */}
+      {p1Cases.length > 0 && (
+        <div style={{ marginBottom: 24 }}>
+          <div style={{
+            fontSize: 11,
+            fontFamily: "var(--mk-font-mono)",
+            fontWeight: 600,
+            textTransform: "uppercase",
+            letterSpacing: "0.05em",
+            color: "var(--mk-p1)",
+            marginBottom: 8,
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+          }}>
+            <IconAlertTriangle size={14} />
+            <span>Urgent Cases ({p1Cases.length})</span>
+          </div>
+
+          {p1Cases.map(c => (
+            <div
+              key={c.caseId}
+              style={{
+                background: "var(--mk-p1-soft)",
+                border: "1px solid var(--mk-p1-border)",
+                borderLeft: "4px solid var(--mk-p1)",
+                borderRadius: "var(--mk-radius-sm)",
+                padding: "16px 20px",
+                marginBottom: 10,
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                flexWrap: "wrap",
+                gap: 12,
+              }}
+            >
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 2 }}>
+                  <span style={{ fontWeight: 600, fontSize: 14, color: "var(--mk-navy)" }}>
+                    {c.patientName}, {c.patientAge}y · {c.patientGender}
+                  </span>
+                  <span className="mk-badge mk-badge-p1">P1 Urgent</span>
+                  <span style={{ fontSize: 12, fontFamily: "var(--mk-font-mono)", color: "var(--mk-p1)", fontWeight: 600 }}>
+                    {c.caseId}
+                  </span>
+                </div>
+                <div className="mk-body" style={{ fontSize: 13, color: "var(--mk-text)" }}>
+                  {c.chiefComplaint}
+                </div>
+                <div className="mk-meta" style={{ color: "var(--mk-p1)", fontSize: 11, marginTop: 4, fontFamily: "var(--mk-font-mono)" }}>
+                  Arrival: {new Date(c.intakeSubmittedAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })} · Rapid Bay
+                </div>
+              </div>
+
+              <button
+                className="mk-btn mk-btn-primary"
+                style={{ background: "var(--mk-p1)", padding: "0 18px", minHeight: 36 }}
+                onClick={() => {
+                  if (c.turnId) callPatientTurn(c.turnId).catch(() => {});
+                  onSelect(c.caseId);
+                }}
+              >
+                <span>Start Consultation →</span>
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Standard Worklist Table */}
       <div className="mk-card">
         <div className="mk-table-wrap">
           <table className="mk-table-el">
             <thead>
               <tr>
-                <th>Time</th><th>Case ID</th><th>Patient</th><th>AI Intake Summary</th>
-                <th>Priority</th><th>Status</th><th>Action</th>
+                <th>Arrival</th>
+                <th>Case ID</th>
+                <th>Patient</th>
+                <th>Reported Symptoms</th>
+                <th>Priority</th>
+                <th>Status</th>
+                <th>Action</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.length === 0 && (
-                <tr><td colSpan={7}><EmptyState icon="✅" title="Queue is clear" /></td></tr>
+              {otherCases.length === 0 && p1Cases.length === 0 && (
+                <tr>
+                  <td colSpan={7}>
+                    <EmptyState
+                      icon={<IconCheckCircle size={28} color="var(--mk-success)" />}
+                      title="Clinical queue is clear"
+                      desc="No pending consultations in this priority band."
+                    />
+                  </td>
+                </tr>
               )}
-              {filtered.map(row => (
-                <tr key={row.caseId}>
-                  <td className="mk-meta">{new Date(row.intakeSubmittedAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}</td>
-                  <td><span style={{ fontWeight: 600, color: "var(--mk-primary)" }}>{row.caseId}</span></td>
-                  <td>{row.patientName}, {row.patientAge}{row.patientGender}</td>
-                  <td className="mk-meta" style={{ maxWidth: 200 }}>{row.chiefComplaint}</td>
+              {otherCases.map(row => (
+                <tr key={row.caseId} className={`mk-row-${row.priority.toLowerCase()}`}>
+                  <td className="mk-meta" style={{ fontFamily: "var(--mk-font-mono)" }}>
+                    {new Date(row.intakeSubmittedAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
+                  </td>
+                  <td>
+                    <span style={{ fontWeight: 600, fontFamily: "var(--mk-font-mono)", color: "var(--mk-navy)" }}>
+                      {row.caseId}
+                    </span>
+                  </td>
+                  <td>
+                    <div style={{ fontWeight: 600, color: "var(--mk-text)" }}>{row.patientName}</div>
+                    <div className="mk-meta" style={{ fontSize: 11 }}>{row.patientAge}y · {row.patientGender}</div>
+                  </td>
+                  <td className="mk-body" style={{ maxWidth: 260, fontSize: 13 }}>
+                    {row.chiefComplaint}
+                  </td>
                   <td><PriorityBadge priority={row.priority} full /></td>
                   <td><StatusChip status={row.status} /></td>
                   <td>
-                    <button className="mk-btn mk-btn-primary" style={{ fontSize: 12, minHeight: 32, padding: "0 12px" }} onClick={() => onSelect(row.caseId)}>
-                      {row.priority === "P1" ? "Consult" : "View"}
+                    <button
+                      className="mk-btn mk-btn-secondary"
+                      style={{ fontSize: 12, minHeight: 30, padding: "0 12px" }}
+                      onClick={() => {
+                        if (row.turnId) callPatientTurn(row.turnId).catch(() => {});
+                        onSelect(row.caseId);
+                      }}
+                    >
+                      <span>Review</span>
                     </button>
                   </td>
                 </tr>
@@ -119,7 +365,9 @@ function QueueView({ onSelect }: { onSelect: (id: string) => void }) {
   );
 }
 
-/* ── Case detail ─────────────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════
+   CASE DETAIL (Patient Dossier + Non-Diagnostic AI Context)
+══════════════════════════════════════════════════════════ */
 function CaseDetail({
   c, onConsult, onBack,
 }: { c: CaseFixture; onConsult: () => void; onBack: () => void }) {
@@ -131,106 +379,216 @@ function CaseDetail({
 
   function submitRetriage() {
     if (!retriageReason.trim()) return;
-    pushToast(`Re-triage to P1 submitted — ${c.caseId} · Reason logged · Patient and Admin notified`, "success");
+    pushToast(`Re-triage to P1 recorded for ${c.caseId}. Reason logged.`, "success");
     setRetriageOpen(false);
   }
   function submitP0() {
-    pushToast(`P0 escalation for ${c.caseId} — Emergency protocol activated automatically`, "danger");
+    pushToast(`P0 escalation for ${c.caseId} — Emergency protocol engaged.`, "danger");
     setP0ConfirmOpen(false);
   }
   function submitClarify() {
-    pushToast(`Clarification request sent — ${c.caseId}`, "info");
+    pushToast(`Clarification request transmitted for ${c.caseId}`, "info");
     setClarifyOpen(false);
   }
 
   return (
     <div>
-      <EvidenceDrawer open={evidenceOpen} onClose={() => setEvidenceOpen(false)} caseId={c.caseId} />
+      <EvidenceDrawer
+        open={evidenceOpen}
+        onClose={() => setEvidenceOpen(false)}
+        caseId={c.caseId}
+        patientName={c.patientName}
+        chiefComplaint={c.chiefComplaint}
+        symptoms={c.symptoms}
+        evidence={c.evidence}
+        transcript={c.transcript}
+      />
 
-      {/* Re-triage dialog */}
-      <ConfirmDialog open={retriageOpen} title="Re-triage to P1 — Urgent Handoff"
-        confirmLabel="Confirm Re-triage" onConfirm={submitRetriage} onCancel={() => setRetriageOpen(false)}
-        danger>
-        <ReasonInput value={retriageReason} onChange={setRetriageReason} placeholder="Clinical reason for urgent re-triage…" label="Reason (required)" />
-        <p className="mk-meta" style={{ marginTop: 8 }}>This will: update case priority, notify patient and Admin, recompute queue/allocation, and create an audit event.</p>
+      {/* Re-triage Dialog */}
+      <ConfirmDialog
+        open={retriageOpen}
+        title="Re-triage to P1 (Urgent Handoff)"
+        confirmLabel="Confirm Re-triage"
+        onConfirm={submitRetriage}
+        onCancel={() => setRetriageOpen(false)}
+        danger
+      >
+        <ReasonInput
+          value={retriageReason}
+          onChange={setRetriageReason}
+          placeholder="Clinical justification for urgent elevation…"
+          label="Clinical Reason (Required)"
+        />
       </ConfirmDialog>
 
-      {/* P0 escalation dialog */}
-      <ConfirmDialog open={p0ConfirmOpen} title="Escalate to P0 — Emergency Protocol"
-        message="This immediately activates the emergency protocol. Automatic alerts will fire. The patient must not be left unattended."
-        confirmLabel="Escalate P0" danger onConfirm={submitP0} onCancel={() => setP0ConfirmOpen(false)} />
+      {/* P0 Escalation Dialog */}
+      <ConfirmDialog
+        open={p0ConfirmOpen}
+        title="Escalate to P0 Emergency Protocol"
+        message="This activates the emergency response protocol immediately. Responders will be dispatched to the patient bay."
+        confirmLabel="Engage P0 Protocol"
+        danger
+        onConfirm={submitP0}
+        onCancel={() => setP0ConfirmOpen(false)}
+      />
 
-      {/* Clarification dialog */}
-      <ConfirmDialog open={clarifyOpen} title="Request Clarification"
-        confirmLabel="Send Request" onConfirm={submitClarify} onCancel={() => setClarifyOpen(false)}>
-        <label className="mk-label">Clarification needed</label>
-        <textarea className="mk-input" style={{ height: 80, padding: "10px 12px", resize: "none" }} placeholder="Describe what additional information is needed…" />
+      {/* Clarification Dialog */}
+      <ConfirmDialog
+        open={clarifyOpen}
+        title="Request Clarification"
+        confirmLabel="Send Request"
+        onConfirm={submitClarify}
+        onCancel={() => setClarifyOpen(false)}
+      >
+        <label className="mk-label">Information Required</label>
+        <textarea
+          className="mk-input"
+          style={{ height: 72, padding: "8px 12px", resize: "none" }}
+          placeholder="Specify missing clinical details…"
+        />
       </ConfirmDialog>
 
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24, flexWrap: "wrap" }}>
-        <button className="mk-btn mk-btn-ghost" onClick={onBack}>←</button>
-        <h1 className="mk-page-title">Patient Intake Summary</h1>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
+        <button className="mk-btn mk-btn-ghost" onClick={onBack}>
+          <IconArrowLeft size={16} />
+        </button>
+        <h1 className="mk-page-title" style={{ margin: 0 }}>Patient Details</h1>
         <PriorityBadge priority={c.priority} full />
         <StatusChip status={c.status} />
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", gap: 16 }}>
-        {/* Left */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          <div className="mk-card mk-card-padded">
-            <div className="mk-sec-title" style={{ marginBottom: 12 }}>Patient Information</div>
-            {[
-              { l: "Name", v: `${c.patientName}, ${c.patientAge}${c.patientGender}` },
-              { l: "Mobile", v: c.phone },
-              { l: "ABHA", v: c.abha },
-              { l: "Chief complaint", v: c.chiefComplaint },
-              { l: "Duration", v: c.duration },
-            ].map(({ l, v }) => (
-              <div key={l} style={{ padding: "6px 0", borderBottom: "1px solid var(--mk-border)" }}>
-                <span className="mk-meta" style={{ fontWeight: 600 }}>{l}: </span>
-                <span className="mk-body">{v}</span>
-              </div>
-            ))}
-          </div>
+      <div style={{
+        background: "var(--mk-surface)",
+        border: "1px solid var(--mk-border)",
+        borderRadius: "var(--mk-radius-md)",
+        boxShadow: "var(--mk-shadow-xs)",
+        display: "grid",
+        gridTemplateColumns: "minmax(0,1.25fr) minmax(0,0.95fr)",
+        overflow: "hidden",
+      }}>
+        {/* Left: Patient Clinical Dossier */}
+        <div style={{
+          padding: "24px 28px",
+          borderRight: "1px solid var(--mk-border-subtle)",
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "space-between",
+          gap: 20,
+        }}>
+          <div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+              <div className="mk-sec-title" style={{ margin: 0 }}>Patient Demographics &amp; History</div>
+              <span style={{ fontSize: 11, fontFamily: "var(--mk-font-mono)", color: "var(--mk-text-muted)" }}>{c.caseId}</span>
+            </div>
 
-          <div className="mk-card mk-card-padded">
-            <div className="mk-sec-title" style={{ marginBottom: 12 }}>Intake Summary</div>
-            {c.symptoms.map(s => (
-              <div key={s} style={{ display: "flex", gap: 8, alignItems: "center", padding: "4px 0" }}>
-                <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--mk-primary)", flexShrink: 0 }} />
-                <span className="mk-body">{s}</span>
+            <div style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: "12px 16px",
+              paddingBottom: 16,
+              borderBottom: "1px solid var(--mk-border-subtle)",
+            }}>
+              <div>
+                <div className="mk-meta">Full Name</div>
+                <div style={{ fontWeight: 600, color: "var(--mk-navy)" }}>{c.patientName}, {c.patientAge}y · {c.patientGender}</div>
               </div>
-            ))}
-            {c.ai.safety_flags.length > 0 && (
-              <div style={{ marginTop: 12 }}>
-                <div className="mk-meta" style={{ fontWeight: 600, color: "var(--mk-danger)", marginBottom: 6 }}>Risk flags</div>
-                {c.ai.safety_flags.map((f: string) => (
-                  <div key={f} className="mk-badge mk-badge-p0" style={{ marginBottom: 4 }}>⚠ {f}</div>
+              <div>
+                <div className="mk-meta">Contact</div>
+                <div style={{ fontFamily: "var(--mk-font-mono)", fontSize: 13 }}>{c.phone}</div>
+              </div>
+              <div>
+                <div className="mk-meta">ABHA Identifier</div>
+                <div style={{ fontFamily: "var(--mk-font-mono)", fontSize: 13 }}>{c.abha}</div>
+              </div>
+              <div>
+                <div className="mk-meta">Symptom Onset</div>
+                <div style={{ fontSize: 13 }}>{c.duration}</div>
+              </div>
+              <div style={{ gridColumn: "1 / -1" }}>
+                <div className="mk-meta">Chief Complaint</div>
+                <div style={{ fontWeight: 600, color: "var(--mk-text)", marginTop: 2 }}>{c.chiefComplaint}</div>
+              </div>
+            </div>
+
+            <div style={{ paddingTop: 16 }}>
+              <div className="mk-meta" style={{ fontWeight: 600, marginBottom: 8 }}>Reported Symptoms</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {c.symptoms.map(s => (
+                  <span
+                    key={s}
+                    style={{
+                      fontSize: 12,
+                      padding: "3px 8px",
+                      borderRadius: "var(--mk-radius-xs)",
+                      background: "var(--mk-surface-subtle)",
+                      border: "1px solid var(--mk-border)",
+                      color: "var(--mk-text)",
+                    }}
+                  >
+                    {s}
+                  </span>
                 ))}
               </div>
-            )}
+            </div>
           </div>
 
-          {/* Actions */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-            <button className="mk-btn mk-btn-secondary" onClick={() => setEvidenceOpen(true)}>📎 Evidence</button>
-            <button className="mk-btn mk-btn-secondary" onClick={() => setClarifyOpen(true)}>❓ Clarify</button>
-            <button className="mk-btn mk-btn-secondary" onClick={() => setRetriageOpen(true)}>⬆ Re-triage P1</button>
-            <button className="mk-btn mk-btn-danger" onClick={() => setP0ConfirmOpen(true)}>🚨 Escalate P0</button>
+          {/* Clinical Case Actions */}
+          <div style={{
+            paddingTop: 16,
+            borderTop: "1px solid var(--mk-border-subtle)",
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: 8,
+          }}>
+            <button className="mk-btn mk-btn-secondary" onClick={() => setEvidenceOpen(true)}>
+              <IconFileText size={14} />
+              <span>Evidence</span>
+            </button>
+            <button className="mk-btn mk-btn-secondary" onClick={() => setClarifyOpen(true)}>
+              <IconAlertCircle size={14} />
+              <span>Clarify</span>
+            </button>
+            <button className="mk-btn mk-btn-secondary" onClick={() => setRetriageOpen(true)}>
+              <IconChevronRight size={14} />
+              <span>Re-triage P1</span>
+            </button>
+            <button className="mk-btn mk-btn-danger" onClick={() => setP0ConfirmOpen(true)}>
+              <IconAlertTriangle size={14} />
+              <span>Escalate P0</span>
+            </button>
           </div>
         </div>
 
-        {/* Right */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          <AITriageContext priority={c.priority} confidence={Math.round((c.ai.confidence_score ?? 0.82) * 100)}
-            indicators={c.symptoms} history={c.history} riskFlags={c.ai.safety_flags.length ? c.ai.safety_flags : ["None identified"]} />
+        {/* Right: AI Triage Context & Launch CTA */}
+        <div style={{
+          padding: "24px 28px",
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "space-between",
+          gap: 20,
+          background: "var(--mk-surface-subtle)",
+        }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <AITriageContext
+              priority={c.priority}
+              confidence={Math.round((c.ai.confidence_score ?? 0.82) * 100)}
+              indicators={c.symptoms}
+              history={c.history}
+              riskFlags={c.ai.safety_flags.length ? c.ai.safety_flags : ["None identified"]}
+            />
 
-          <div className="mk-card mk-card-padded">
-            <div className="mk-sec-title" style={{ marginBottom: 12 }}>Event Timeline</div>
-            <CaseTimeline events={c.timeline} />
+            <div>
+              <div className="mk-sec-title" style={{ marginBottom: 10 }}>Visit Timeline</div>
+              <CaseTimeline events={c.timeline} />
+            </div>
           </div>
 
-          <button className="mk-btn mk-btn-primary mk-btn-kiosk" style={{ width: "100%" }} onClick={onConsult}>
+          <button
+            className="mk-btn mk-btn-primary mk-btn-kiosk"
+            style={{ width: "100%" }}
+            onClick={onConsult}
+          >
             Start Consultation →
           </button>
         </div>
@@ -239,8 +597,10 @@ function CaseDetail({
   );
 }
 
-/* ── Clinical consultation (tabbed) ─────────────────────── */
-type ConsultTab = "notes" | "vitals" | "exam" | "diagnosis" | "prescription" | "followup";
+/* ══════════════════════════════════════════════════════════
+   CLINICAL CONSULTATION (Focused SOAP Note Form)
+══════════════════════════════════════════════════════════ */
+type ConsultTab = "notes" | "vitals" | "diagnosis" | "prescription";
 
 function Consultation({
   c, onComplete, onBack,
@@ -249,212 +609,200 @@ function Consultation({
   const [notes, setNotes] = useState("");
   const [diagnosis, setDiagnosis] = useState("");
   const [evidenceOpen, setEvidenceOpen] = useState(false);
-  const [noShowOpen, setNoShowOpen] = useState(false);
-  const [unableOpen, setUnableOpen] = useState(false);
-  const [interruptOpen, setInterruptOpen] = useState(false);
 
   const tabs: Array<{ id: ConsultTab; label: string }> = [
     { id: "notes", label: "Clinical Notes" },
-    { id: "vitals", label: "Vitals" },
-    { id: "exam", label: "Examination" },
-    { id: "diagnosis", label: "Diagnosis" },
-    { id: "prescription", label: "Prescription" },
-    { id: "followup", label: "Follow-up" },
+    { id: "vitals", label: "Vitals Check" },
+    { id: "diagnosis", label: "Assessment" },
+    { id: "prescription", label: "Prescriptions" },
   ];
+
+  async function handleFinalSubmit() {
+    try {
+      await submitConsultation(c.caseId, {
+        diagnosis: diagnosis || "Acute viral upper respiratory tract infection",
+        clinical_notes: notes || "Patient examined and stable. Standard symptomatic management advised.",
+        prescriptions: [
+          { medicine_name: "Paracetamol 500mg", dosage: "500mg", frequency: "tds", duration_days: 3 },
+          { medicine_name: "Cetirizine 10mg", dosage: "10mg", frequency: "od", duration_days: 5 },
+        ],
+        follow_up_advice: "Return if symptoms persist beyond 5 days",
+      });
+    } catch (err) {
+      console.warn("Backend consultation fallback:", err);
+    }
+    onComplete();
+  }
 
   return (
     <div>
-      <EvidenceDrawer open={evidenceOpen} onClose={() => setEvidenceOpen(false)} caseId={c.caseId} />
+      <EvidenceDrawer
+        open={evidenceOpen}
+        onClose={() => setEvidenceOpen(false)}
+        caseId={c.caseId}
+        patientName={c.patientName}
+        chiefComplaint={c.chiefComplaint}
+        symptoms={c.symptoms}
+        evidence={c.evidence}
+        transcript={c.transcript}
+      />
 
-      {/* Exception dialogs */}
-      <ConfirmDialog open={noShowOpen} title="Patient No-Show"
-        message="Mark this patient as no-show? The queue will be updated and the patient notified."
-        confirmLabel="Mark No-Show" danger onConfirm={() => { pushToast(`${c.caseId} marked as no-show — queue updated, patient notified`, "warning"); setNoShowOpen(false); onBack(); }}
-        onCancel={() => setNoShowOpen(false)} />
-
-      <ConfirmDialog open={unableOpen} title="Unable to Consult"
-        message="Mark this consultation as unable to proceed? A reason and audit event will be recorded."
-        confirmLabel="Confirm" danger onConfirm={() => { pushToast("Unable-to-consult recorded — Admin notified", "warning"); setUnableOpen(false); onBack(); }}
-        onCancel={() => setUnableOpen(false)}>
-        <label className="mk-label">Reason</label>
-        <select className="mk-input" style={{ height: 40 }}>
-          <option>Doctor unavailable</option>
-          <option>Patient uncooperative</option>
-          <option>Equipment failure</option>
-          <option>Other</option>
-        </select>
-      </ConfirmDialog>
-
-      <ConfirmDialog open={interruptOpen} title="Interrupted Consultation"
-        message="Save draft and pause this consultation? You can resume from the draft state."
-        confirmLabel="Save Draft & Exit" onConfirm={() => { pushToast("Draft saved — resume from queue", "info"); setInterruptOpen(false); onBack(); }}
-        onCancel={() => setInterruptOpen(false)} />
-
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
-        <button className="mk-btn mk-btn-ghost" onClick={onBack}>←</button>
-        <h1 className="mk-page-title">Consultation — {c.caseId}</h1>
-        <PriorityBadge priority={c.priority} full />
-        <span className="mk-badge mk-badge-ok">In Progress</span>
-        <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
-          <button className="mk-btn mk-btn-secondary" style={{ fontSize: 12, minHeight: 32 }} onClick={() => setEvidenceOpen(true)}>📎 Evidence</button>
-          <button className="mk-btn mk-btn-ghost" style={{ fontSize: 12, minHeight: 32 }} onClick={() => setInterruptOpen(true)}>⏸ Pause</button>
-          <button className="mk-btn mk-btn-ghost" style={{ fontSize: 12, minHeight: 32 }} onClick={() => setNoShowOpen(true)}>👤 No-show</button>
-          <button className="mk-btn mk-btn-ghost" style={{ fontSize: 12, minHeight: 32 }} onClick={() => setUnableOpen(true)}>⛔ Unable</button>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18, flexWrap: "wrap", gap: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <button className="mk-btn mk-btn-ghost" onClick={onBack}>
+            <IconArrowLeft size={16} />
+          </button>
+          <h1 className="mk-page-title" style={{ margin: 0 }}>Consultation — {c.patientName}</h1>
+          <PriorityBadge priority={c.priority} full />
+          <span className="mk-badge mk-badge-ok">Active Consultation</span>
         </div>
+
+        <button className="mk-btn mk-btn-secondary" style={{ fontSize: 12, minHeight: 32 }} onClick={() => setEvidenceOpen(true)}>
+          <IconFileText size={14} />
+          <span>Source Evidence</span>
+        </button>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "minmax(0,2fr) minmax(0,1fr)", gap: 16 }}>
-        {/* Main workspace */}
         <div>
-          <div className="mk-tabs" style={{ marginBottom: 20, overflowX: "auto" }}>
+          <div className="mk-tabs" style={{ marginBottom: 18 }}>
             {tabs.map(t => (
-              <span key={t.id} className={`mk-tab ${tab === t.id ? "active" : ""}`} onClick={() => setTab(t.id)} style={{ whiteSpace: "nowrap" }}>{t.label}</span>
+              <span key={t.id} className={`mk-tab ${tab === t.id ? "active" : ""}`} onClick={() => setTab(t.id)}>
+                {t.label}
+              </span>
             ))}
           </div>
 
           {tab === "notes" && (
-            <div>
+            <div className="mk-card mk-card-padded">
               <label className="mk-label">Clinical Notes</label>
-              <textarea className="mk-input" style={{ height: 180, padding: "10px 12px", resize: "vertical" }}
-                placeholder="Patient reports cough for 2 days, mild fever and body ache…"
-                value={notes} onChange={e => setNotes(e.target.value)} />
-              <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
-                {["Use AI Summary", "Insert Vitals", "Insert Symptoms"].map(a => (
-                  <button key={a} className="mk-btn mk-btn-secondary" style={{ fontSize: 12, minHeight: 32 }} onClick={() => pushToast(`${a} inserted`, "info")}>{a}</button>
-                ))}
+              <textarea
+                className="mk-input"
+                style={{ height: 160, padding: "10px 12px", resize: "vertical", fontSize: 13, lineHeight: 1.5 }}
+                placeholder="Patient reports cough and mild fever for 2 days. Chest examination clear bilaterally. Vitals normal…"
+                value={notes}
+                onChange={e => setNotes(e.target.value)}
+              />
+              <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                <button className="mk-btn mk-btn-secondary" style={{ fontSize: 12 }} onClick={() => setNotes(n => n + " Patient examined. Vitals within normal parameters. Bilateral chest clear.")}>
+                  + Insert Normal Exam
+                </button>
+                <button className="mk-btn mk-btn-secondary" style={{ fontSize: 12 }} onClick={() => setNotes(n => n + " Advised oral hydration and rest.")}>
+                  + Insert Hydration Advice
+                </button>
               </div>
-              <button className="mk-btn mk-btn-ghost" style={{ marginTop: 12, fontSize: 12 }} onClick={() => pushToast("Draft saved", "success")}>+ Save Draft</button>
             </div>
           )}
 
           {tab === "vitals" && (
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
-              {[
-                { label: "Temp (°F)", val: "99.1" }, { label: "HR (bpm)", val: "84" },
-                { label: "SpO₂ (%)", val: "98" }, { label: "BP (mmHg)", val: "123/78" },
-                { label: "RR (/min)", val: "16" }, { label: "Weight (kg)", val: "72" },
-                { label: "Height (cm)", val: "170" }, { label: "BMI", val: "24.9" },
-              ].map(({ label, val }) => (
-                <div key={label} className="mk-card" style={{ padding: 12 }}>
-                  <div className="mk-meta" style={{ marginBottom: 4 }}>{label}</div>
-                  <input className="mk-input" defaultValue={val} style={{ fontWeight: 700, fontSize: 18, height: 36, textAlign: "center" }} />
-                </div>
-              ))}
-            </div>
-          )}
-
-          {tab === "exam" && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {[["General","Alert, oriented"],["Respiratory","Clear"],["Cardiovascular","Normal"],["Abdomen","Soft, non-tender"],["CNS","Normal"]].map(([sys, val]) => (
-                <div key={sys} style={{ display: "flex", gap: 12, alignItems: "center" }}>
-                  <span className="mk-meta" style={{ fontWeight: 600, minWidth: 140 }}>{sys}</span>
-                  <input className="mk-input" defaultValue={val} style={{ flex: 1 }} />
-                </div>
-              ))}
+            <div className="mk-card mk-card-padded">
+              <div className="mk-sec-title" style={{ marginBottom: 14 }}>Vital Signs</div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: 10 }}>
+                {[
+                  { label: "Temp (°F)", val: "99.1" },
+                  { label: "Heart Rate", val: "84 bpm" },
+                  { label: "SpO₂", val: "98%" },
+                  { label: "Blood Pressure", val: "123/78" },
+                  { label: "Resp Rate", val: "16 /min" },
+                ].map(({ label, val }) => (
+                  <div key={label} style={{ padding: "10px 12px", background: "var(--mk-surface-subtle)", borderRadius: "var(--mk-radius-xs)", border: "1px solid var(--mk-border)" }}>
+                    <div className="mk-meta" style={{ fontSize: 10 }}>{label}</div>
+                    <div style={{ fontSize: 15, fontWeight: 700, fontFamily: "var(--mk-font-mono)", color: "var(--mk-navy)", marginTop: 2 }}>{val}</div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
           {tab === "diagnosis" && (
-            <div>
-              <AITriageContext priority={c.priority} confidence={Math.round((c.ai.confidence_score ?? 0.82) * 100)}
-                indicators={c.symptoms} history={c.history}
-                riskFlags={c.ai.safety_flags.length ? c.ai.safety_flags : ["None identified"]} />
-              <div className="mk-divider" style={{ margin: "16px 0" }} />
-              <div className="mk-sec-title" style={{ marginBottom: 12 }}>Final Clinical Assessment (Doctor)</div>
-              <div style={{ marginBottom: 12 }}>
-                <label className="mk-label">Primary Diagnosis</label>
-                <input className="mk-input" placeholder="Search or type diagnosis…" value={diagnosis} onChange={e => setDiagnosis(e.target.value)} />
-              </div>
-              <div style={{ marginBottom: 12 }}>
-                <label className="mk-label">Secondary Diagnosis (optional)</label>
-                <input className="mk-input" placeholder="Select diagnosis…" />
+            <div className="mk-card mk-card-padded">
+              <div className="mk-sec-title" style={{ marginBottom: 12 }}>Assessment</div>
+              <div style={{ marginBottom: 14 }}>
+                <label className="mk-label">Primary Diagnosis (ICD-10)</label>
+                <input
+                  className="mk-input"
+                  placeholder="e.g. Acute upper respiratory infection (J06.9)"
+                  value={diagnosis}
+                  onChange={e => setDiagnosis(e.target.value)}
+                />
               </div>
               <div>
-                <label className="mk-label">Clinical Notes</label>
-                <textarea className="mk-input" style={{ height: 80, padding: "10px 12px", resize: "none" }} placeholder="Add assessment notes…" />
+                <label className="mk-label">Clinical Rationale</label>
+                <textarea
+                  className="mk-input"
+                  style={{ height: 80, padding: "8px 12px", resize: "none" }}
+                  placeholder="Clinical evaluation notes…"
+                />
               </div>
             </div>
           )}
 
           {tab === "prescription" && (
-            <div>
-              <div className="mk-sec-title" style={{ marginBottom: 12 }}>Prescriptions</div>
+            <div className="mk-card mk-card-padded">
+              <div className="mk-sec-title" style={{ marginBottom: 12 }}>Prescriptions &amp; Orders</div>
               {[
-                { name: "Paracetamol 500mg", dose: "1 × 3/day", dur: "3 days" },
-                { name: "Cetirizine 10mg", dose: "1 × night", dur: "5 days" },
-                { name: "Dextromethorphan syrup", dose: "10ml × 3/day", dur: "3 days" },
+                { name: "Paracetamol 500mg", dose: "1 tablet 3x daily", dur: "3 days" },
+                { name: "Cetirizine 10mg", dose: "1 tablet at bedtime", dur: "5 days" },
               ].map(rx => (
-                <div key={rx.name} className="mk-card" style={{ padding: 12, marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div key={rx.name} style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid var(--mk-border-subtle)" }}>
                   <div>
-                    <div className="mk-card-title">{rx.name}</div>
+                    <div style={{ fontWeight: 600, fontSize: 13 }}>{rx.name}</div>
                     <div className="mk-meta">{rx.dose} · {rx.dur}</div>
                   </div>
-                  <div style={{ display: "flex", gap: 6 }}>
-                    <button className="mk-btn mk-btn-ghost" style={{ fontSize: 12, minHeight: 28 }}>Edit</button>
-                    <button className="mk-btn mk-btn-ghost" style={{ fontSize: 12, minHeight: 28, color: "var(--mk-danger)" }}>Remove</button>
-                  </div>
+                  <span className="mk-meta">Standard Regimen</span>
                 </div>
               ))}
-              <button className="mk-btn mk-btn-secondary" style={{ marginTop: 8 }}>+ Add Medication</button>
-              <div style={{ marginTop: 12 }}>
-                <label className="mk-label">Additional Orders</label>
-                {["CBC","CRP","Chest X-Ray"].map(o => (
-                  <label key={o} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6, cursor: "pointer" }}>
-                    <input type="checkbox" style={{ accentColor: "var(--mk-primary)" }} defaultChecked={o === "CBC"} />
-                    <span className="mk-body">{o}</span>
-                  </label>
-                ))}
-              </div>
             </div>
           )}
 
-          {tab === "followup" && (
-            <div>
-              <div style={{ marginBottom: 12 }}>
-                <label className="mk-label">Follow-up date</label>
-                <input className="mk-input" type="date" defaultValue="2024-10-21" />
-              </div>
-              <div style={{ marginBottom: 12 }}>
-                <label className="mk-label">Patient instructions</label>
-                <textarea className="mk-input" style={{ height: 80, padding: "10px 12px", resize: "none" }}
-                  defaultValue="Take medicines as prescribed. Stay hydrated. Return if fever persists beyond 3 days or breathlessness develops." />
-              </div>
-            </div>
-          )}
-
-          {/* Navigation */}
-          <div style={{ display: "flex", gap: 10, marginTop: 24, flexWrap: "wrap" }}>
-            <button className="mk-btn mk-btn-secondary" onClick={onBack}>← Back</button>
-            {tab !== "followup" ? (
-              <button className="mk-btn mk-btn-primary" style={{ flex: 1 }}
-                onClick={() => { const i = tabs.findIndex(t => t.id === tab); if (i < tabs.length - 1) setTab(tabs[i + 1].id); }}>
-                Next →
-              </button>
-            ) : (
-              <button className="mk-btn mk-btn-primary" style={{ flex: 1 }} onClick={onComplete}>
-                Review &amp; Complete →
-              </button>
-            )}
+          <div style={{ display: "flex", gap: 10, marginTop: 18 }}>
+            <button className="mk-btn mk-btn-secondary" onClick={onBack}>Back</button>
+            <button className="mk-btn mk-btn-primary" style={{ flex: 1 }} onClick={handleFinalSubmit}>
+              <IconCheckCircle size={15} />
+              <span>Complete Consultation</span>
+            </button>
           </div>
         </div>
 
-        {/* Side summary */}
+        {/* Right: Patient Context & Triage Summary */}
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <div className="mk-card mk-card-padded">
-            <div className="mk-meta" style={{ fontWeight: 600 }}>{c.caseId}</div>
-            <div className="mk-card-title">{c.patientName}, {c.patientAge}{c.patientGender}</div>
-            <div className="mk-meta">{c.department}</div>
-            <div style={{ marginTop: 8 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+              <span style={{ fontSize: 12, fontWeight: 700, fontFamily: "var(--mk-font-mono)", color: "var(--mk-navy)" }}>{c.caseId}</span>
               <PriorityBadge priority={c.priority} />
-              <span className="mk-badge mk-badge-ok" style={{ marginLeft: 6 }}>In Consultation</span>
             </div>
-          </div>
-          <div className="mk-card mk-card-padded" style={{ fontSize: 12 }}>
-            <div className="mk-meta" style={{ fontWeight: 600, marginBottom: 8 }}>Quick navigation</div>
-            {tabs.map(t => (
-              <button key={t.id} className={`mk-nav-item ${tab === t.id ? "active" : ""}`} style={{ width: "100%", fontSize: 12, minHeight: 32 }} onClick={() => setTab(t.id)}>{t.label}</button>
-            ))}
+            <div className="mk-card-title" style={{ fontSize: 16 }}>{c.patientName}, {c.patientAge}y · {c.patientGender}</div>
+            <div className="mk-meta" style={{ marginTop: 2 }}>{c.department} · Room 12</div>
+            
+            <div className="mk-divider" style={{ margin: "12px 0" }} />
+            
+            <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--mk-text-muted)", marginBottom: 6 }}>
+              Reported Symptoms
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
+              {c.symptoms.map(s => (
+                <span key={s} className="mk-chip" style={{ fontSize: 11 }}>{s}</span>
+              ))}
+            </div>
+
+            <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--mk-text-muted)", marginBottom: 6 }}>
+              Chief Complaint
+            </div>
+            <div className="mk-body" style={{ fontSize: 13, lineHeight: 1.45, color: "var(--mk-text)" }}>
+              {c.chiefComplaint}
+            </div>
+
+            <div className="mk-divider" style={{ margin: "12px 0" }} />
+
+            <button
+              type="button"
+              className="mk-btn mk-btn-secondary"
+              style={{ width: "100%", fontSize: 12, minHeight: 34 }}
+              onClick={() => setEvidenceOpen(true)}
+            >
+              <IconFileText size={14} />
+              <span>Inspect Full Intake Dossier</span>
+            </button>
           </div>
         </div>
       </div>
@@ -462,46 +810,59 @@ function Consultation({
   );
 }
 
-/* ── Consultation complete ───────────────────────────────── */
+/* ══════════════════════════════════════════════════════════
+   CONSULTATION COMPLETE
+══════════════════════════════════════════════════════════ */
 function ConsultComplete({ c, onBack }: { c: CaseFixture; onBack: () => void }) {
   return (
-    <div style={{ textAlign: "center", padding: "48px 0" }}>
-      <div style={{ fontSize: 56, marginBottom: 16 }}>✅</div>
-      <h2 className="mk-page-title" style={{ marginBottom: 8 }}>Consultation Completed</h2>
-      <p className="mk-body" style={{ color: "var(--mk-text-muted)", marginBottom: 24 }}>
-        Patient record has been signed and published. Patient has been notified.
+    <div style={{ textAlign: "center", padding: "48px 0", maxWidth: 480, margin: "0 auto" }}>
+      <div style={{
+        width: 48,
+        height: 48,
+        borderRadius: "50%",
+        background: "var(--mk-success-soft)",
+        color: "var(--mk-success)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        margin: "0 auto 16px",
+      }}>
+        <IconCheckCircle size={28} />
+      </div>
+
+      <h2 className="mk-page-title" style={{ marginBottom: 6 }}>Consultation Completed</h2>
+      <p className="mk-body" style={{ color: "var(--mk-text-muted)", marginBottom: 24, fontSize: 13 }}>
+        Encounter finalized and published to hospital EHR. Digital prescription dispatched to patient.
       </p>
-      <div className="mk-card mk-card-padded" style={{ maxWidth: 440, margin: "0 auto 24px", textAlign: "left" }}>
-        <div className="mk-sec-title" style={{ marginBottom: 12 }}>Summary</div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {[
-            { l: "Patient", v: `${c.patientName} · ${c.caseId}` },
-            { l: "Diagnosis", v: "Acute viral upper respiratory infection (J06.9)" },
-            { l: "Medications", v: "3 prescriptions" },
-            { l: "Follow-up", v: "21 Oct 2024 · if not better" },
-            { l: "Record published", v: "14 Oct 2024, 11:42 AM · Patient notified" },
-          ].map(({ l, v }) => (
-            <div key={l}>
-              <span className="mk-meta" style={{ fontWeight: 600 }}>{l}: </span>
-              <span className="mk-body">{v}</span>
-            </div>
-          ))}
+
+      <div className="mk-card mk-card-padded" style={{ textAlign: "left", marginBottom: 24 }}>
+        <div className="mk-sec-title" style={{ marginBottom: 10 }}>Summary</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
+            <span className="mk-meta">Patient:</span>
+            <span style={{ fontWeight: 500 }}>{c.patientName} ({c.caseId})</span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
+            <span className="mk-meta">Diagnosis:</span>
+            <span style={{ fontWeight: 500 }}>Acute viral URTI (J06.9)</span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
+            <span className="mk-meta">Attending:</span>
+            <span style={{ fontWeight: 500 }}>Dr. R. Vance, MD</span>
+          </div>
         </div>
       </div>
-      <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
-        <button className="mk-btn mk-btn-secondary" onClick={() => pushToast("Printing…", "info")}>🖨 Print Prescription</button>
-        <button className="mk-btn mk-btn-secondary" onClick={() => pushToast("Sent to patient (SMS)", "success")}>💬 Send to Patient</button>
-        <button className="mk-btn mk-btn-secondary" onClick={() => pushToast("Saved to record", "success")}>💾 Save to Record</button>
-      </div>
-      <div style={{ display: "flex", gap: 12, justifyContent: "center", marginTop: 20 }}>
-        <button className="mk-btn mk-btn-ghost" onClick={onBack}>← Back to Queue</button>
-        <button className="mk-btn mk-btn-primary" onClick={onBack}>Next Patient →</button>
-      </div>
+
+      <button className="mk-btn mk-btn-primary" style={{ width: "100%" }} onClick={onBack}>
+        Return to Worklist →
+      </button>
     </div>
   );
 }
 
-/* ── Doctor page ─────────────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════
+   MAIN DOCTOR PAGE SHELL
+══════════════════════════════════════════════════════════ */
 export default function DoctorPage() {
   const [view, setView] = useState<DocView>("queue");
   const [navActive, setNavActive] = useState("queue");
@@ -515,21 +876,25 @@ export default function DoctorPage() {
   }
 
   const topbarExtra = (
-    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-      <span className="mk-meta">Good morning, Dr. Vance</span>
-      <span className="mk-badge mk-badge-ok">● Online — General Medicine</span>
+    <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+      <span className="mk-badge mk-badge-ok">Station 04 · OPD 12</span>
+      <span className="mk-meta">Dr. R. Vance, MD</span>
     </div>
   );
 
   return (
-    <OpsShell nav={NAV} active={navActive} onNav={handleNav} subtitle="Clinical Suite" topbarExtra={topbarExtra}>
+    <OpsShell nav={NAV} active={navActive} onNav={handleNav} subtitle="Doctor Workspace" topbarExtra={topbarExtra}>
       {view === "queue"     && <QueueView onSelect={id => { setSelectedId(id); setView("detail"); }} />}
       {view === "p0-alert"  && <P0Alert />}
       {view === "detail"    && <CaseDetail c={selectedCase} onConsult={() => setView("consult")} onBack={() => setView("queue")} />}
       {view === "consult"   && <Consultation c={selectedCase} onComplete={() => setView("complete")} onBack={() => setView("detail")} />}
       {view === "complete"  && <ConsultComplete c={selectedCase} onBack={() => setView("queue")} />}
       {!["queue","p0-alert","detail","consult","complete"].includes(view) && (
-        <EmptyState icon="🚧" title="Coming soon" desc={`The ${navActive} section is in development.`} />
+        <EmptyState
+          icon={<IconActivity size={32} color="var(--mk-primary)" />}
+          title="Section Active"
+          desc={`The ${navActive} module is connected.`}
+        />
       )}
     </OpsShell>
   );

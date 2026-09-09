@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { getProfile, updateProfile } from '@/lib/api';
+import { IconUser, IconAlertTriangle } from "@/components/icons";
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -14,22 +15,23 @@ export default function ProfilePage() {
     phone: '',
     emergency_contact: '',
   });
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    setLoading(true);
     getProfile()
       .then(data => {
-        setForm({
-          full_name: (data as Record<string, string>).full_name || '',
-          age: String((data as Record<string, number>).age || ''),
-          gender: (data as Record<string, string>).gender || '',
-          blood_group: (data as Record<string, string>).blood_group || '',
-          phone: (data as Record<string, string>).phone || '',
-          emergency_contact: (data as Record<string, string>).emergency_contact || '',
-        });
+        if (data) {
+          setForm({
+            full_name: (data as any).full_name || '',
+            age: (data as any).age ? String((data as any).age) : '',
+            gender: (data as any).gender || '',
+            blood_group: (data as any).blood_group || '',
+            phone: (data as any).phone || '',
+            emergency_contact: (data as any).emergency_contact || '',
+          });
+        }
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -44,9 +46,9 @@ export default function ProfilePage() {
         ...form,
         age: form.age ? parseInt(form.age, 10) : undefined,
       });
-      router.push('/documents');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save');
+      router.push('/dashboard');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to save profile');
     } finally {
       setSaving(false);
     }
@@ -59,14 +61,19 @@ export default function ProfilePage() {
   return (
     <main className="container" style={{ paddingTop: '2rem' }}>
       <div className="card">
-        <div className="logo-mark">
-          <span className="icon">👤</span>
+        <div className="logo-mark" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <IconUser size={22} color="var(--mk-primary)" />
           <span>Patient Details</span>
         </div>
 
         <p className="page-subtitle">Please fill in your basic information</p>
 
-        {error && <div className="alert alert-danger">⚠️ {error}</div>}
+        {error && (
+          <div className="alert alert-danger" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <IconAlertTriangle size={16} />
+            <span>{error}</span>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit}>
           <div className="field">

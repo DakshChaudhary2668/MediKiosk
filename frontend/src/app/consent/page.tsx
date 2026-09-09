@@ -3,23 +3,24 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { recordConsent } from '@/lib/api';
+import { IconHospital, IconAlertTriangle } from "@/components/icons";
 
 export default function ConsentPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  async function handleConsent(accepted: boolean) {
+  async function handleConsent(agreed: boolean) {
+    if (!agreed) {
+      router.push('/login');
+      return;
+    }
     setLoading(true);
     setError('');
     try {
-      await recordConsent(accepted);
-      if (accepted) {
-        router.push('/profile');
-      } else {
-        router.push('/');
-      }
-    } catch (err) {
+      await recordConsent(true);
+      router.push('/dashboard');
+    } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to record consent');
     } finally {
       setLoading(false);
@@ -29,8 +30,8 @@ export default function ConsentPage() {
   return (
     <main className="container" style={{ paddingTop: '3rem' }}>
       <div className="card">
-        <div className="logo-mark">
-          <span className="icon">🏥</span>
+        <div className="logo-mark" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <IconHospital size={22} color="var(--mk-primary)" />
           <span>MediKiosk</span>
         </div>
 
@@ -50,7 +51,12 @@ export default function ConsentPage() {
           </ul>
         </div>
 
-        {error && <div className="alert alert-danger">⚠️ {error}</div>}
+        {error && (
+          <div className="alert alert-danger" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <IconAlertTriangle size={16} />
+            <span>{error}</span>
+          </div>
+        )}
 
         <div style={{ display: 'flex', gap: 'var(--space-sm)' }}>
           <button className="btn btn-secondary" onClick={() => handleConsent(false)} disabled={loading}>

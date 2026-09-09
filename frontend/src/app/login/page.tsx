@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { login } from '@/lib/api';
+import { IconHospital, IconAlertTriangle } from "@/components/icons";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -29,15 +30,20 @@ export default function LoginPage() {
   return (
     <main className="container" style={{ paddingTop: '3rem' }}>
       <div className="card">
-        <div className="logo-mark">
-          <span className="icon">🏥</span>
+        <div className="logo-mark" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <IconHospital size={22} color="var(--mk-primary)" />
           <span>MediKiosk</span>
         </div>
 
         <h1 className="page-title">Sign In</h1>
         <p className="page-subtitle">Access your patient portal</p>
 
-        {error && <div className="alert alert-danger">⚠️ {error}</div>}
+        {error && (
+          <div className="alert alert-danger" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <IconAlertTriangle size={16} />
+            <span>{error}</span>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit}>
           <div className="field">

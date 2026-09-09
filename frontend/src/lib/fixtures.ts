@@ -33,6 +33,9 @@ export interface CaseFixture {
   patientsAhead?: number;
   ai: AIPretriageResponse;
   timeline: Array<{ label: string; time?: string; detail?: string; variant?: "success" | "danger" | "warning" | "muted" }>;
+  evidence?: Array<{ field?: string; summary?: string; source?: string }>;
+  transcript?: string[];
+  turnId?: string;
 }
 
 export const CASES: Record<PriorityBand, CaseFixture> = {
@@ -61,7 +64,7 @@ export const CASES: Record<PriorityBand, CaseFixture> = {
       confidence_band: "high",
       confidence_score: 0.97,
       uncertainty: { needs_human_review: false, reasons: [], missing_information: [], contradictions: [] },
-      safety_flags: ["Possible STEMI", "Immediate intervention required"],
+      safety_flags: ["Critical cardiac indicators detected", "Immediate intervention required"],
       evidence: [
         { source: "patient_intake", field: "symptoms", summary: "Severe chest pain with radiation, diaphoresis" },
         { source: "patient_intake", field: "history", summary: "Hypertension, diabetes — high cardiac risk" },
@@ -70,6 +73,10 @@ export const CASES: Record<PriorityBand, CaseFixture> = {
       model: { name: "pretriage-v1", version: "1.2.0", prompt_version: "p1.3" },
       generated_at: "2024-10-14T09:10:03+05:30",
     },
+    transcript: [
+      "Mujhe achanak se seene mein bohot tez dard ho raha hai aur saans lene mein takleef ho rahi hai. Dard mere baye haath tak ja raha hai aur pasina aa raha hai.",
+      "Chest discomfort started 30 mins ago. Pressure sensation with radiation to left shoulder and arm. Diaphoresis present."
+    ],
     timeline: [
       { label: "Emergency detected by AI triage", time: "09:10:02", variant: "danger" },
       { label: "Automatic emergency alerts fired", time: "09:10:02", detail: "Emergency team, Admin, clinical staff notified", variant: "danger" },
@@ -108,7 +115,7 @@ export const CASES: Record<PriorityBand, CaseFixture> = {
       confidence_band: "high",
       confidence_score: 0.89,
       uncertainty: { needs_human_review: true, reasons: ["Neck stiffness warrants urgent evaluation"], missing_information: [], contradictions: [] },
-      safety_flags: ["Meningism signs — rule out meningitis"],
+      safety_flags: ["Meningism indicators — urgent clinical assessment required"],
       evidence: [
         { source: "patient_intake", field: "symptoms", summary: "Severe headache with neck stiffness and photophobia" },
       ],
@@ -116,6 +123,10 @@ export const CASES: Record<PriorityBand, CaseFixture> = {
       model: { name: "pretriage-v1", version: "1.2.0", prompt_version: "p1.3" },
       generated_at: "2024-10-14T08:14:00+05:30",
     },
+    transcript: [
+      "Mujhe kal se bohot tez sar dard hai, ulti jaisi lag rahi hai aur roshni dekhne par aankhon mein dard ho raha hai. Gardan ghumane mein bhi dard hai.",
+      "Severe acute onset headache with neck stiffness and light sensitivity. Nausea present."
+    ],
     timeline: [
       { label: "Intake submitted", time: "08:13 AM", variant: "success" },
       { label: "AI triage completed — P1", time: "08:14 AM", detail: "Confidence 89% · Risk flag: meningism signs", variant: "warning" },
@@ -162,9 +173,13 @@ export const CASES: Record<PriorityBand, CaseFixture> = {
       model: { name: "pretriage-v1", version: "1.2.0", prompt_version: "p1.3" },
       generated_at: "2024-10-14T08:25:00+05:30",
     },
+    transcript: [
+      "Mujhe 2 din se khansi ho rahi hai aur halka bukhar hai. Badan mein dard bhi hai, par saans lene mein koi takleef nahi hai.",
+      "Cough with mild fever and body ache for 2 days. No shortness of breath or chest pain reported."
+    ],
     timeline: [
       { label: "Intake submitted", time: "08:24 AM", variant: "success" },
-      { label: "AI triage completed — P2", time: "08:25 AM", detail: "Confidence 82% · No risk flags" },
+      { label: "AI triage completed — P2", time: "08:25 AM", detail: "High protocol alignment · No risk flags" },
       { label: "Auto-assigned: Dr. Vance, General Medicine", time: "08:25 AM", variant: "success" },
       { label: "Token issued: MK-3048", time: "08:25 AM", variant: "success" },
     ],
@@ -207,6 +222,10 @@ export const CASES: Record<PriorityBand, CaseFixture> = {
       model: { name: "pretriage-v1", version: "1.2.0", prompt_version: "p1.3" },
       generated_at: "2024-10-14T09:11:00+05:30",
     },
+    transcript: [
+      "Mujhe pichle 3 din se kamar ke nichle hisse mein dard hai. Jhukne aur chalne mein thoda khichav mehsus hota hai.",
+      "Mechanical lower back pain and lumbar stiffness for 3 days following heavy lifting. No radiating numbness."
+    ],
     timeline: [
       { label: "Intake submitted", time: "09:10 AM", variant: "success" },
       { label: "AI triage completed — P3 Fast Track", time: "09:11 AM", detail: "Confidence 91%" },

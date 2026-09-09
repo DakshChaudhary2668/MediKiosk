@@ -3,6 +3,15 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { getSession, sendMessage, sendVoice, completeSession } from '@/lib/api';
+import {
+  IconMic,
+  IconMicOff,
+  IconSend,
+  IconCheckCircle,
+  IconAlertTriangle,
+  IconActivity,
+  IconX,
+} from '@/components/icons';
 import styles from './intake.module.scss';
 
 interface Message {
@@ -21,15 +30,15 @@ interface PatientCaseData {
 }
 
 const CATEGORIES = [
-  { id: 'fever', label: 'Fever / Infection', emoji: '🤒' },
-  { id: 'respiratory', label: 'Respiratory', emoji: '🫁' },
-  { id: 'gastrointestinal', label: 'Gastrointestinal', emoji: '🤢' },
-  { id: 'headache_neurological', label: 'Headache / Neuro', emoji: '🧠' },
-  { id: 'musculoskeletal', label: 'Pain / Muscle', emoji: '💪' },
-  { id: 'skin', label: 'Skin', emoji: '🩹' },
-  { id: 'urinary', label: 'Urinary', emoji: '🚻' },
-  { id: 'chest', label: 'Chest', emoji: '❤️' },
-  { id: 'general_health', label: 'General / Other', emoji: '🩺' },
+  { id: 'fever', label: 'Fever / Infection' },
+  { id: 'respiratory', label: 'Respiratory' },
+  { id: 'gastrointestinal', label: 'Gastrointestinal' },
+  { id: 'headache_neurological', label: 'Headache / Neuro' },
+  { id: 'musculoskeletal', label: 'Pain / Muscle' },
+  { id: 'skin', label: 'Skin' },
+  { id: 'urinary', label: 'Urinary' },
+  { id: 'chest', label: 'Chest' },
+  { id: 'general_health', label: 'General / Other' },
 ];
 
 type VoiceState = 'IDLE' | 'LISTENING' | 'PROCESSING' | 'SPEAKING' | 'ERROR';
@@ -275,15 +284,16 @@ export default function IntakePage() {
         <div>
           <strong>AI Health Assessment</strong>
           <span className={styles.statusBadge} data-status={sessionStatus}>
-            {sessionStatus === 'active' ? 'In Progress' : sessionStatus === 'completed' ? 'Complete' : sessionStatus === 'red_flagged' ? '⚠️ Emergency' : sessionStatus}
+            {sessionStatus === 'active' ? 'In Progress' : sessionStatus === 'completed' ? 'Complete' : sessionStatus === 'red_flagged' ? 'Emergency Protocol' : sessionStatus}
           </span>
         </div>
       </header>
 
       {/* Red flag alert */}
       {redFlag && (
-        <div className="alert alert-danger" style={{ margin: 'var(--space-sm)', borderRadius: 'var(--radius-md)' }}>
-          ⚠️ <strong>Emergency Alert:</strong> Based on what you described, please seek immediate emergency medical care or call 108 / 911.
+        <div className="alert alert-danger" style={{ margin: 'var(--space-sm)', borderRadius: 'var(--radius-md)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <IconAlertTriangle size={18} />
+          <span><strong>Emergency Alert:</strong> Based on what you described, please seek immediate emergency medical care or call 108 / 911.</span>
         </div>
       )}
 
@@ -293,7 +303,11 @@ export default function IntakePage() {
           <div key={i} className={`${styles.message} ${styles[m.speaker]}`}>
             <div className={styles.bubble}>
               {m.content}
-              {m.input_mode === 'voice' && <span className={styles.voiceTag}>🎤 Voice</span>}
+              {m.input_mode === 'voice' && (
+                <span className={styles.voiceTag} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  <IconMic size={12} /> Voice
+                </span>
+              )}
             </div>
           </div>
         ))}
@@ -325,14 +339,19 @@ export default function IntakePage() {
       {error && (
         <div className="alert alert-danger" style={{ margin: 'var(--space-xs) var(--space-sm)', borderRadius: 'var(--radius-md)' }}>
           <span>{error}</span>
-          <button onClick={() => setError('')} style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: 'inherit' }}>✕</button>
+          <button onClick={() => setError('')} style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', display: 'inline-flex', alignItems: 'center', padding: 2 }} aria-label="Dismiss error">
+            <IconX size={14} />
+          </button>
         </div>
       )}
 
       {/* Survey complete summary */}
       {surveyComplete && patientCase && (
         <div className={styles.caseCard}>
-          <h3>✅ Assessment Complete</h3>
+          <h3 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <IconCheckCircle size={20} color="var(--color-success)" />
+            <span>Assessment Complete</span>
+          </h3>
           <div className={styles.caseGrid}>
             {Boolean(patientCase.chief_complaint) && <div><label>Complaint</label><span>{String(patientCase.chief_complaint)}</span></div>}
             {Boolean(patientCase.category) && <div><label>Category</label><span>{String(patientCase.category)}</span></div>}
@@ -358,7 +377,13 @@ export default function IntakePage() {
               title={voiceState === 'LISTENING' ? 'Click to finish speaking' : 'Click to speak'}
               type="button"
             >
-              {voiceState === 'LISTENING' ? '⏹' : voiceState === 'PROCESSING' ? '⏳' : '🎤'}
+              {voiceState === 'LISTENING' ? (
+                <IconMicOff size={18} />
+              ) : voiceState === 'PROCESSING' ? (
+                <IconActivity size={18} />
+              ) : (
+                <IconMic size={18} />
+              )}
             </button>
 
             {/* Text input */}
@@ -380,8 +405,9 @@ export default function IntakePage() {
               onClick={handleSend}
               disabled={!input.trim() || sending || voiceState === 'LISTENING'}
               type="button"
+              style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
             >
-              ➤
+              <IconSend size={16} />
             </button>
           </div>
 

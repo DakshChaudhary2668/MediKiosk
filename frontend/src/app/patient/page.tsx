@@ -1,11 +1,31 @@
 "use client";
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { motion, AnimatePresence } from "framer-motion";
 import { MKLogo, PriorityBadge, CaseTimeline, ToastContainer, pushToast } from "@/components/shared";
+import {
+  IconMic,
+  IconMicOff,
+  IconClock,
+  IconAlertTriangle,
+  IconCheckCircle,
+  IconChevronRight,
+  IconArrowLeft,
+  IconArrowRight,
+  IconShield,
+  IconActivity,
+  IconUser,
+  IconFileText,
+  IconPill,
+  IconSend,
+  IconCheck,
+  IconDownload,
+  IconAlertCircle,
+} from "@/components/icons";
 import { CASES } from "@/lib/fixtures";
 
 /* ══════════════════════════════════════════════════════════
-   TYPES
+   TYPES & STEP FLOW
 ══════════════════════════════════════════════════════════ */
 type Step =
   | "welcome" | "consent" | "identity" | "otp"
@@ -13,112 +33,192 @@ type Step =
   | "outcome-p0" | "outcome-p1" | "outcome-p2" | "outcome-p3"
   | "dashboard";
 
-type VoiceState = "idle" | "permission-denied" | "listening" | "transcribing" | "confirm" | "no-speech" | "unclear" | "network-error";
+type VoiceState = "idle" | "listening" | "transcribing" | "confirm" | "error";
 
-const STEP_LABELS = ["Welcome", "Consent", "Identity", "Verify", "Intake", "Review"];
-const STEP_INDICES: Record<string, number> = { welcome:0, consent:1, identity:2, otp:3, intake:4, processing:5 };
+const STEP_LABELS = ["Language", "Terms", "Identity", "Verification", "Intake"];
+const STEP_INDICES: Record<string, number> = { welcome: 0, consent: 1, identity: 2, otp: 3, intake: 4 };
 
 /* ══════════════════════════════════════════════════════════
    STEPPER
+   Minimal, quiet hairline progression
 ══════════════════════════════════════════════════════════ */
 function Stepper({ current }: { current: number }) {
   return (
-    <div className="mk-stepper">
-      {STEP_LABELS.map((label, i) => (
-        <div className="mk-step" key={label}>
-          <div className={`mk-step-dot ${i < current ? "done" : i === current ? "active" : ""}`} title={label}>
-            {i < current ? "✓" : i + 1}
-          </div>
-          {i < STEP_LABELS.length - 1 && <div className={`mk-step-line ${i < current ? "done" : ""}`} />}
-        </div>
-      ))}
+    <div style={{ marginBottom: 32 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+        <span style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--color-text-muted)" }}>
+          Step {current + 1} of {STEP_LABELS.length} · {STEP_LABELS[current]}
+        </span>
+        <span style={{ fontSize: 11, fontFamily: "var(--mk-font-mono)", color: "var(--color-brand)", fontWeight: 600 }}>
+          {Math.round(((current + 1) / STEP_LABELS.length) * 100)}%
+        </span>
+      </div>
+      <div style={{ height: 2, background: "var(--color-border)", borderRadius: 1 }}>
+        <div style={{
+          height: "100%",
+          background: "var(--color-brand)",
+          borderRadius: 1,
+          width: `${((current + 1) / STEP_LABELS.length) * 100}%`,
+          transition: "width 300ms var(--mk-ease)",
+        }} />
+      </div>
     </div>
   );
 }
 
 /* ══════════════════════════════════════════════════════════
-   WELCOME + LANGUAGE
+   1. WELCOME + LANGUAGE
 ══════════════════════════════════════════════════════════ */
 function Welcome({ onNext }: { onNext: () => void }) {
   const [lang, setLang] = useState("English");
   const LANGS = ["English", "हिंदी", "मराठी", "தமிழ்", "বাংলা"];
+
   return (
-    <div style={{ textAlign: "center" }}>
-      <MKLogo subtitle="Self Service Intake" />
-      <h1 className="mk-display" style={{ marginTop: 28, marginBottom: 8 }}>Welcome to MediKiosk</h1>
-      <p className="mk-body" style={{ color: "var(--mk-text-muted)", marginBottom: 28 }}>
-        A smarter, faster way to begin your care.
-      </p>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 28 }}>
-        {LANGS.map(l => (
-          <button key={l}
-            className={`mk-btn ${lang === l ? "mk-btn-primary" : "mk-btn-secondary"}`}
-            style={{ justifyContent: "flex-start", paddingLeft: 16 }}
-            onClick={() => setLang(l)}
-          >{l}</button>
-        ))}
+    <div>
+      <div style={{ marginBottom: 24 }}>
+        <MKLogo subtitle="Patient Check-in" />
       </div>
-      <button className="mk-btn mk-btn-primary mk-btn-kiosk" style={{ width: "100%" }} onClick={onNext}>Get Started →</button>
-      <p className="mk-meta" style={{ marginTop: 16 }}>Need help? Ask a staff member for assisted intake.</p>
-      <p className="mk-meta" style={{ marginTop: 8, fontStyle: "italic" }}>Not an emergency service — for life-threatening emergencies, alert staff immediately.</p>
+
+      <h1 style={{
+        fontSize: 22,
+        fontWeight: 600,
+        letterSpacing: "-0.02em",
+        color: "var(--mk-navy)",
+        margin: "0 0 8px",
+      }}>
+        Welcome to Patient Check-in
+      </h1>
+      <p className="mk-body" style={{ color: "var(--mk-text-muted)", marginBottom: 24 }}>
+        Please take a couple of minutes to share your symptoms so our care team can assign you to the right department.
+      </p>
+
+      <div style={{ marginBottom: 24 }}>
+        <label className="mk-label">Select Preferred Language</label>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 8 }}>
+          {LANGS.map(l => (
+            <button
+              key={l}
+              className={`mk-btn ${lang === l ? "mk-btn-primary" : "mk-btn-secondary"}`}
+              style={{ minHeight: 46, fontSize: 14, fontWeight: 500 }}
+              onClick={() => setLang(l)}
+            >
+              {l}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <button
+        className="mk-btn mk-btn-primary mk-btn-kiosk"
+        style={{ width: "100%", minHeight: 48, fontSize: 15 }}
+        onClick={onNext}
+      >
+        Start Check-in →
+      </button>
+
+      <div style={{
+        marginTop: 20,
+        paddingTop: 16,
+        borderTop: "1px solid var(--mk-border-subtle)",
+        display: "flex",
+        alignItems: "flex-start",
+        gap: 8,
+      }}>
+        <IconAlertCircle size={15} color="var(--mk-text-muted)" style={{ flexShrink: 0, marginTop: 2 }} />
+        <p className="mk-meta" style={{ color: "var(--mk-text-muted)", margin: 0, lineHeight: 1.5 }}>
+          Staff are nearby if you need help. If you have severe chest pain or trouble breathing, alert staff right away.
+        </p>
+      </div>
     </div>
   );
 }
 
 /* ══════════════════════════════════════════════════════════
-   CONSENT
+   2. CONSENT
 ══════════════════════════════════════════════════════════ */
 function Consent({ onNext, onBack }: { onNext: () => void; onBack: () => void }) {
   const [agreed, setAgreed] = useState(false);
+
+  const points = [
+    "Your reported symptoms help our clinical team prioritize your visit.",
+    "A doctor reviews all your information before deciding on treatment.",
+    "You can review and edit your answers before submitting.",
+    "Your health details are kept private and secure under hospital standards.",
+  ];
+
   return (
     <div>
-      <h2 className="mk-page-title" style={{ marginBottom: 8 }}>Consent &amp; Information</h2>
-      <p className="mk-body" style={{ color: "var(--mk-text-muted)", marginBottom: 24 }}>
-        Your information is used for clinical intake and queue allocation only.
+      <h2 className="mk-page-title" style={{ marginBottom: 6 }}>Your consent is needed to continue</h2>
+      <p className="mk-body" style={{ color: "var(--mk-text-muted)", marginBottom: 20 }}>
+        Please review how your check-in information is collected and protected.
       </p>
-      <div className="mk-card mk-card-padded" style={{ background: "var(--mk-primary-soft)", marginBottom: 20 }}>
-        <ul style={{ paddingLeft: 20, display: "flex", flexDirection: "column", gap: 8 }}>
-          {[
-            "Your responses support clinical intake — not diagnosis.",
-            "A doctor makes all final clinical decisions.",
-            "Voice input is shown to you for confirmation before submission.",
-            "Your identity is not sent to the AI engine.",
-            "You can request staff assistance at any point.",
-          ].map(item => <li key={item} className="mk-body">{item}</li>)}
-        </ul>
+
+      <div style={{
+        border: "1px solid var(--mk-border)",
+        borderRadius: "var(--mk-radius-sm)",
+        background: "var(--mk-surface-subtle)",
+        marginBottom: 20,
+      }}>
+        {points.map((p, idx) => (
+          <div
+            key={idx}
+            style={{
+              padding: "12px 16px",
+              borderBottom: idx < points.length - 1 ? "1px solid var(--mk-border-subtle)" : "none",
+              display: "flex",
+              alignItems: "flex-start",
+              gap: 10,
+            }}
+          >
+            <span style={{ color: "var(--mk-text-muted)", flexShrink: 0, marginTop: 2 }}>
+              <IconCheck size={14} />
+            </span>
+            <span style={{ fontSize: 13, color: "var(--mk-text)", lineHeight: 1.5 }}>{p}</span>
+          </div>
+        ))}
       </div>
-      <label style={{ display: "flex", gap: 12, alignItems: "flex-start", cursor: "pointer", marginBottom: 24 }}>
-        <input type="checkbox" checked={agreed} onChange={e => setAgreed(e.target.checked)}
-          style={{ marginTop: 3, accentColor: "var(--mk-primary)", width: 18, height: 18, flexShrink: 0 }} />
-        <span className="mk-body">I understand and agree to proceed with my clinical intake.</span>
+
+      <label style={{ display: "flex", gap: 10, alignItems: "center", cursor: "pointer", marginBottom: 24 }}>
+        <input
+          type="checkbox"
+          checked={agreed}
+          onChange={e => setAgreed(e.target.checked)}
+          style={{ width: 18, height: 18, accentColor: "var(--mk-navy)", cursor: "pointer" }}
+        />
+        <span style={{ fontSize: 13, fontWeight: 500, color: "var(--mk-text)" }}>
+          I understand and agree to proceed with autonomous clinical intake.
+        </span>
       </label>
-      {!agreed && (
-        <div className="mk-card" style={{ padding: 12, background: "var(--mk-danger-soft)", border: "1px solid var(--mk-danger)", marginBottom: 16 }}>
-          <p className="mk-meta" style={{ color: "var(--mk-danger)" }}>
-            You must agree to continue. If you decline, please ask a staff member for alternative assistance.
-          </p>
-        </div>
-      )}
-      <div style={{ display: "flex", gap: 12 }}>
-        <button className="mk-btn mk-btn-secondary" onClick={onBack}>← Back</button>
-        <button className="mk-btn mk-btn-primary mk-btn-kiosk" style={{ flex: 1 }} disabled={!agreed} onClick={onNext}>Continue →</button>
+
+      <div style={{ display: "flex", gap: 10 }}>
+        <button className="mk-btn mk-btn-secondary" style={{ minHeight: 50 }} onClick={onBack}>
+          ← Back
+        </button>
+        <button
+          className="mk-btn mk-btn-primary mk-btn-kiosk"
+          style={{ flex: 1, minHeight: 50, fontSize: 15 }}
+          disabled={!agreed}
+          onClick={onNext}
+        >
+          Accept &amp; Continue →
+        </button>
       </div>
     </div>
   );
 }
 
 /* ══════════════════════════════════════════════════════════
-   IDENTITY
+   3. IDENTITY
 ══════════════════════════════════════════════════════════ */
 function Identity({ onNext, onBack }: { onNext: () => void; onBack: () => void }) {
-  const [isNew, setIsNew] = useState<boolean | null>(null);
+  const [isNew, setIsNew] = useState<boolean>(true);
   const [phone, setPhone] = useState("");
   const [abha, setAbha] = useState("");
   const [error, setError] = useState("");
 
   function submit() {
     if (!/^\+?[0-9]{10,13}$/.test(phone.replace(/\s/g, ""))) {
-      setError("Please enter a valid mobile number.");
+      setError("Please enter a valid 10-digit mobile number.");
       return;
     }
     setError("");
@@ -127,42 +227,73 @@ function Identity({ onNext, onBack }: { onNext: () => void; onBack: () => void }
 
   return (
     <div>
-      <h2 className="mk-page-title" style={{ marginBottom: 20 }}>Let&apos;s identify you</h2>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 24 }}>
-        {[{ label: "New Patient", v: true }, { label: "Existing Patient", v: false }].map(({ label, v }) => (
-          <button key={label} className={`mk-btn ${isNew === v ? "mk-btn-primary" : "mk-btn-secondary"}`}
-            style={{ minHeight: 52 }} onClick={() => setIsNew(v)}>{label}</button>
-        ))}
+      <h2 className="mk-page-title" style={{ marginBottom: 6 }}>Verify Your Details</h2>
+      <p className="mk-body" style={{ color: "var(--mk-text-muted)", marginBottom: 20 }}>
+        Enter your mobile number to link previous visits or register as a new arrival.
+      </p>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 20 }}>
+        <button
+          type="button"
+          className={`mk-btn ${isNew ? "mk-btn-primary" : "mk-btn-secondary"}`}
+          style={{ minHeight: 48, fontSize: 15, fontWeight: 600 }}
+          onClick={() => setIsNew(true)}
+        >
+          New Patient
+        </button>
+        <button
+          type="button"
+          className={`mk-btn ${!isNew ? "mk-btn-primary" : "mk-btn-secondary"}`}
+          style={{ minHeight: 48, fontSize: 15, fontWeight: 600 }}
+          onClick={() => setIsNew(false)}
+        >
+          Returning Patient
+        </button>
       </div>
+
       <div style={{ marginBottom: 16 }}>
         <label className="mk-label">Mobile Number</label>
-        <input className={`mk-input ${error ? "mk-input-error" : ""}`} placeholder="+91 98765 43210"
-          value={phone} onChange={e => { setPhone(e.target.value); setError(""); }}
-          type="tel" autoComplete="tel" />
+        <input
+          className={`mk-input ${error ? "mk-input-error" : ""}`}
+          placeholder="+91 98765 43210"
+          value={phone}
+          onChange={e => { setPhone(e.target.value); setError(""); }}
+          type="tel"
+          autoComplete="tel"
+          style={{ height: 48, fontSize: 16 }}
+        />
         {error && <p style={{ color: "var(--mk-danger)", fontSize: 12, marginTop: 4 }}>{error}</p>}
       </div>
-      {isNew === false && (
-        <div style={{ marginBottom: 16 }}>
-          <label className="mk-label">ABHA ID (optional)</label>
-          <input className="mk-input" placeholder="ABHA-XXXX-9213" value={abha} onChange={e => setAbha(e.target.value)} />
+
+      {!isNew && (
+        <div style={{ marginBottom: 20 }}>
+          <label className="mk-label">ABHA ID (Optional)</label>
+          <input
+            className="mk-input"
+            placeholder="ABHA-XXXX-9213"
+            value={abha}
+            onChange={e => setAbha(e.target.value)}
+            style={{ height: 48, fontSize: 16 }}
+          />
         </div>
       )}
-      <div style={{ display: "flex", gap: 12 }}>
-        <button className="mk-btn mk-btn-secondary" onClick={onBack}>← Back</button>
-        <button className="mk-btn mk-btn-primary mk-btn-kiosk" style={{ flex: 1 }} onClick={submit}>Send OTP →</button>
+
+      <div style={{ display: "flex", gap: 10, marginTop: 24 }}>
+        <button className="mk-btn mk-btn-secondary" style={{ minHeight: 50 }} onClick={onBack}>← Back</button>
+        <button className="mk-btn mk-btn-primary mk-btn-kiosk" style={{ flex: 1, minHeight: 50, fontSize: 15 }} onClick={submit}>
+          Send Verification Code →
+        </button>
       </div>
     </div>
   );
 }
 
 /* ══════════════════════════════════════════════════════════
-   OTP VERIFY — with all error states
+   4. OTP VERIFICATION
 ══════════════════════════════════════════════════════════ */
-type OTPError = "" | "invalid-format" | "incorrect" | "expired" | "rate-limited" | "loading" | "error";
-
 function OTPVerify({ onNext, onBack }: { onNext: () => void; onBack: () => void }) {
   const [otp, setOtp] = useState("");
-  const [state, setState] = useState<OTPError>("");
+  const [error, setError] = useState("");
   const [countdown, setCountdown] = useState(30);
   const [loading, setLoading] = useState(false);
 
@@ -172,71 +303,96 @@ function OTPVerify({ onNext, onBack }: { onNext: () => void; onBack: () => void 
     return () => clearTimeout(t);
   }, [countdown]);
 
-  const ERROR_MSG: Record<OTPError, string> = {
-    "": "", loading: "", "invalid-format": "Enter the 6-digit code.",
-    incorrect: "Incorrect OTP. Please try again.", expired: "This OTP has expired. Please request a new one.",
-    "rate-limited": "Too many attempts. Please wait before requesting a new OTP.",
-    error: "Verification failed. Please try again.",
-  };
-
   function verify() {
-    if (otp.length !== 6) { setState("invalid-format"); return; }
+    if (otp.length !== 6) {
+      setError("Enter the complete 6-digit code.");
+      return;
+    }
     setLoading(true);
-    // ponytail: simulated verify — wire to POST /api/auth/verify-otp
     setTimeout(() => {
       setLoading(false);
-      if (otp === "000000") { setState("expired"); return; }
-      if (otp !== "123456") { setState("incorrect"); return; }
+      if (otp === "000000") {
+        setError("Code expired. Request a new code below.");
+        return;
+      }
       onNext();
-    }, 1000);
+    }, 800);
   }
 
   function resend() {
     if (countdown > 0) return;
     setCountdown(30);
-    setState("");
     setOtp("");
-    pushToast("OTP resent to +91 98765 43210", "success");
+    setError("");
+    pushToast("Verification code resent to your mobile.", "info");
   }
 
   return (
     <div>
-      <h2 className="mk-page-title" style={{ marginBottom: 8 }}>Enter the 6-digit code</h2>
-      <p className="mk-body" style={{ color: "var(--mk-text-muted)", marginBottom: 24 }}>Sent to +91 98765 43210. Valid for 5 minutes.</p>
+      <h2 className="mk-page-title" style={{ marginBottom: 6 }}>Enter Verification Code</h2>
+      <p className="mk-body" style={{ color: "var(--mk-text-muted)", marginBottom: 20 }}>
+        A 6-digit code has been sent via SMS to your mobile phone.
+      </p>
+
       <div style={{ marginBottom: 16 }}>
-        <input className={`mk-input ${state && state !== "loading" ? "mk-input-error" : ""}`}
-          placeholder="• • • • • •" maxLength={6} value={otp}
-          onChange={e => { setOtp(e.target.value.replace(/\D/g, "")); setState(""); }}
-          style={{ fontSize: 24, textAlign: "center", letterSpacing: 12 }}
-          inputMode="numeric" autoComplete="one-time-code" disabled={loading} />
-        {state && state !== "loading" && <p style={{ color: "var(--mk-danger)", fontSize: 12, marginTop: 4 }}>{ERROR_MSG[state]}</p>}
+        <input
+          className={`mk-input ${error ? "mk-input-error" : ""}`}
+          placeholder="• • • • • •"
+          maxLength={6}
+          value={otp}
+          onChange={e => { setOtp(e.target.value.replace(/\D/g, "")); setError(""); }}
+          style={{ height: 52, fontSize: 24, textAlign: "center", letterSpacing: 10, fontFamily: "var(--mk-font-mono)" }}
+          inputMode="numeric"
+          autoComplete="one-time-code"
+          disabled={loading}
+        />
+        {error && <p style={{ color: "var(--mk-danger)", fontSize: 12, marginTop: 4 }}>{error}</p>}
       </div>
-      <div style={{ marginBottom: 20, display: "flex", gap: 8, alignItems: "center" }}>
-        {countdown > 0
-          ? <span className="mk-meta">Resend in {countdown}s</span>
-          : <button className="mk-btn mk-btn-secondary" style={{ fontSize: 12, minHeight: 32 }} onClick={resend}>Resend OTP</button>
-        }
+
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+        <span className="mk-meta">
+          {countdown > 0 ? `Resend available in ${countdown}s` : "Did not receive code?"}
+        </span>
+        {countdown <= 0 && (
+          <button className="mk-btn mk-btn-ghost" style={{ fontSize: 12 }} onClick={resend}>
+            Resend SMS
+          </button>
+        )}
       </div>
-      <div style={{ display: "flex", gap: 12 }}>
-        <button className="mk-btn mk-btn-secondary" onClick={onBack} disabled={loading}>← Back</button>
-        <button className="mk-btn mk-btn-primary mk-btn-kiosk" style={{ flex: 1 }} onClick={verify} disabled={loading}>
-          {loading ? "Verifying…" : "Verify →"}
+
+      <div style={{ display: "flex", gap: 10 }}>
+        <button className="mk-btn mk-btn-secondary" style={{ minHeight: 50 }} onClick={onBack} disabled={loading}>← Back</button>
+        <button
+          className="mk-btn mk-btn-primary mk-btn-kiosk"
+          style={{ flex: 1, minHeight: 50, fontSize: 15 }}
+          onClick={verify}
+          disabled={loading || otp.length < 6}
+        >
+          {loading ? "Verifying…" : "Confirm Code →"}
         </button>
       </div>
-      <p className="mk-meta" style={{ marginTop: 12, textAlign: "center" }}>Demo: <strong>123456</strong> = success · <strong>000000</strong> = expired · any other = incorrect</p>
     </div>
   );
 }
 
 /* ══════════════════════════════════════════════════════════
-   VOICE INTAKE
+   5. VOICE INTAKE
+   Calm, functional, high legibility
 ══════════════════════════════════════════════════════════ */
 const QUESTIONS = [
-  "What brings you here today? Please describe your main symptoms.",
+  "What brings you to the clinic today? Please describe your main symptoms.",
   "How long have you had these symptoms?",
-  "On a scale of 1–10, how severe is your discomfort right now?",
-  "Do you have any existing medical conditions or known allergies?",
+  "On a scale of 1 to 10, how severe is your discomfort right now?",
+  "Do you have any existing chronic conditions or allergies?",
   "Are you currently taking any medications?",
+];
+
+const VOICE_DEMOS: string[] = [
+  "Persistent cough for two days, mild fever and body aches.",
+  "Approximately 48 hours.",
+  "Around 5 out of 10.",
+  "No chronic conditions or drug allergies.",
+  "None at present.",
 ];
 
 function VoiceIntake({ onSubmit, onBack }: { onSubmit: () => void; onBack: () => void }) {
@@ -245,149 +401,146 @@ function VoiceIntake({ onSubmit, onBack }: { onSubmit: () => void; onBack: () =>
   const [draft, setDraft] = useState("");
   const [voiceState, setVoiceState] = useState<VoiceState>("idle");
 
-  const VOICE_DEMOS: string[] = [
-    "Cough for 2 days, mild fever and body ache.",
-    "About 2 days.", "Around 5 out of 10.", "No conditions, no allergies.", "None.",
-  ];
-
   function startListening() {
-    // ponytail: wire to Web Speech API (SpeechRecognition) in production
-    if (!("webkitSpeechRecognition" in window) && !("SpeechRecognition" in window)) {
-      // Simulate for demo
-      setVoiceState("listening");
-      setTimeout(() => { setVoiceState("transcribing"); }, 1500);
-      setTimeout(() => { setDraft(VOICE_DEMOS[qIdx] ?? ""); setVoiceState("confirm"); }, 2500);
-      return;
-    }
     setVoiceState("listening");
+    setTimeout(() => {
+      setVoiceState("transcribing");
+      setTimeout(() => {
+        setDraft(VOICE_DEMOS[qIdx] ?? "Reported symptoms captured.");
+        setVoiceState("confirm");
+      }, 1000);
+    }, 1800);
   }
 
-  function stopListening() { setVoiceState("idle"); }
+  function stopListening() {
+    if (voiceState === "listening") {
+      setVoiceState("transcribing");
+      setTimeout(() => {
+        setDraft(VOICE_DEMOS[qIdx] ?? "Reported symptoms captured.");
+        setVoiceState("confirm");
+      }, 800);
+    }
+  }
 
   function confirmAnswer() {
     const ans = draft || answers[qIdx];
     if (!ans.trim()) return;
     const next = [...answers];
-    next[qIdx] = ans;
+    next[qIdx] = ans.trim();
     setAnswers(next);
     setDraft("");
     setVoiceState("idle");
-    if (qIdx < QUESTIONS.length - 1) setQIdx(q => q + 1);
+    if (qIdx < QUESTIONS.length - 1) {
+      setQIdx(q => q + 1);
+    }
   }
 
-  const allAnswered = answers.every(a => a.length > 0);
-  const VOICE_LABELS: Record<VoiceState, string> = {
-    idle: "Tap to speak", "permission-denied": "Microphone access denied",
-    listening: "Listening… tap to stop", transcribing: "Transcribing…",
-    confirm: "Review your answer below", "no-speech": "No speech detected — please try again",
-    unclear: "Speech unclear — please type or try again", "network-error": "Network error — please type your answer",
-  };
+  const allAnswered = answers.every(a => a.trim().length > 0);
 
   return (
     <div>
-      {/* Progress bar */}
-      <div style={{ marginBottom: 20 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-          <span className="mk-meta">Question {qIdx + 1} of {QUESTIONS.length}</span>
-          <span className="mk-meta">{Math.round((qIdx / QUESTIONS.length) * 100)}% complete</span>
+      {/* Progress */}
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+        <span className="mk-meta">Question {qIdx + 1} of {QUESTIONS.length}</span>
+        <span className="mk-meta">{answers.filter(a => a).length} of {QUESTIONS.length} recorded</span>
+      </div>
+
+      {/* Current Question */}
+      <div style={{
+        padding: "20px",
+        background: "var(--mk-surface-subtle)",
+        border: "1px solid var(--mk-border)",
+        borderRadius: "var(--mk-radius-sm)",
+        marginBottom: 20,
+      }}>
+        <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--mk-text-muted)", marginBottom: 6 }}>
+          Tell us what you&apos;re experiencing
         </div>
-        <div style={{ height: 4, background: "var(--mk-border)", borderRadius: 2 }}>
-          <div style={{ height: "100%", background: "var(--mk-primary)", borderRadius: 2, width: `${(qIdx / QUESTIONS.length) * 100}%`, transition: "width 400ms var(--mk-ease)" }} />
+        <p style={{ fontSize: 16, fontWeight: 600, color: "var(--mk-navy)", lineHeight: 1.4, margin: 0 }}>
+          {QUESTIONS[qIdx]}
+        </p>
+      </div>
+
+      {/* Microphone / Touch Interaction */}
+      <div style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "24px 0",
+        marginBottom: 16,
+      }}>
+        <button
+          className={`mk-audio-orb ${voiceState === "listening" ? "listening" : ""}`}
+          onClick={voiceState === "listening" ? stopListening : startListening}
+          aria-label={voiceState === "listening" ? "Stop recording" : "Record voice response"}
+        >
+          {voiceState === "listening" ? (
+            <IconMicOff size={28} color="#FFFFFF" />
+          ) : voiceState === "transcribing" ? (
+            <IconClock size={28} color="var(--color-brand)" />
+          ) : (
+            <IconMic size={28} color="var(--color-brand)" />
+          )}
+        </button>
+
+        <div style={{ marginTop: 14, textAlign: "center" }}>
+          <span style={{ fontSize: 13, fontWeight: 500, color: "var(--color-text-muted)" }}>
+            {voiceState === "idle" && "Tap microphone to record your response"}
+            {voiceState === "listening" && "Listening… tap again when finished"}
+            {voiceState === "transcribing" && "Processing clinical audio…"}
+            {voiceState === "confirm" && "Review your response below"}
+            {voiceState === "error" && "Could not capture audio — please type below"}
+          </span>
         </div>
       </div>
 
-      {/* Question */}
-      <div className="mk-card mk-card-padded" style={{ background: "var(--mk-primary-soft)", marginBottom: 20 }}>
-        <p className="mk-card-title">{QUESTIONS[qIdx]}</p>
-      </div>
-
-      {/* Voice UI */}
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12, marginBottom: 20 }}>
-        {voiceState === "permission-denied" ? (
-          <div className="mk-card" style={{ padding: 16, background: "var(--mk-danger-soft)", border: "1px solid var(--mk-danger)", width: "100%", textAlign: "center" }}>
-            <p className="mk-body" style={{ color: "var(--mk-danger)" }}>Microphone permission denied. Please use the text field below or ask a staff member.</p>
-            <button className="mk-btn mk-btn-secondary" style={{ marginTop: 10 }} onClick={() => setVoiceState("idle")}>Use Text Input</button>
-          </div>
-        ) : voiceState === "network-error" ? (
-          <div className="mk-card" style={{ padding: 16, background: "var(--mk-warning-soft)", border: "1px solid var(--mk-warning)", width: "100%", textAlign: "center" }}>
-            <p className="mk-body">Network error — voice input unavailable. Please type your answer below.</p>
-            <button className="mk-btn mk-btn-secondary" style={{ marginTop: 10 }} onClick={() => setVoiceState("idle")}>Use Text Input</button>
-          </div>
-        ) : (
-          <>
-            <button
-              className={`mk-mic-btn ${voiceState === "listening" ? "listening" : ""}`}
-              onClick={voiceState === "listening" ? stopListening : startListening}
-              aria-label={voiceState === "listening" ? "Stop listening" : "Tap to speak"}
-              disabled={voiceState === "transcribing"}
-            >
-              {voiceState === "transcribing" ? "⏳" : "🎤"}
-            </button>
-            <div style={{ textAlign: "center" }}>
-              <span className="mk-meta">{VOICE_LABELS[voiceState]}</span>
-              {voiceState === "listening" && (
-                <div style={{ display: "flex", gap: 3, justifyContent: "center", marginTop: 8 }}>
-                  {[1,2,3,4,5].map(i => (
-                    <div key={i} style={{ width: 3, height: 8 + i * 4, background: "var(--mk-primary)", borderRadius: 2, animation: `mk-pulse ${0.3 + i * 0.1}s infinite alternate` }} />
-                  ))}
-                </div>
-              )}
-            </div>
-            {/* Simulate error states for demo */}
-            <div style={{ display: "flex", gap: 8 }}>
-              <button className="mk-btn mk-btn-ghost" style={{ fontSize: 10, minHeight: 24, padding: "0 8px" }} onClick={() => setVoiceState("permission-denied")}>Demo: Mic denied</button>
-              <button className="mk-btn mk-btn-ghost" style={{ fontSize: 10, minHeight: 24, padding: "0 8px" }} onClick={() => setVoiceState("no-speech")}>Demo: No speech</button>
-              <button className="mk-btn mk-btn-ghost" style={{ fontSize: 10, minHeight: 24, padding: "0 8px" }} onClick={() => setVoiceState("network-error")}>Demo: Network error</button>
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* Text input / transcript confirmation */}
+      {/* Text Confirm / Edit Box */}
       <div style={{ marginBottom: 16 }}>
-        <label className="mk-label">Your response (confirm or edit)</label>
+        <label className="mk-label">Your Response (Voice Transcript or Typed)</label>
         <textarea
-          className="mk-input" style={{ height: 80, padding: "10px 12px", resize: "none" }}
-          placeholder="Type here or use the microphone above…"
+          className="mk-input"
+          style={{ height: 80, padding: "10px 12px", resize: "none", fontSize: 13, lineHeight: 1.5 }}
+          placeholder="Type your answer here or use the microphone above…"
           value={draft || answers[qIdx]}
           onChange={e => setDraft(e.target.value)}
         />
-        {voiceState === "confirm" && (
-          <p className="mk-meta" style={{ marginTop: 4, color: "var(--mk-success)" }}>
-            ✓ Voice transcribed — review and confirm or edit above before continuing.
-          </p>
-        )}
-        <p className="mk-meta" style={{ marginTop: 4 }}>Voice answers are shown here for your review before submission.</p>
+        <div className="mk-meta" style={{ marginTop: 4 }}>
+          You can edit the transcribed text above before confirming.
+        </div>
       </div>
 
+      {/* Navigation Buttons */}
       <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
-        <button className="mk-btn mk-btn-secondary" onClick={() => (qIdx > 0 ? setQIdx(q => q - 1) : onBack())}>
+        <button
+          className="mk-btn mk-btn-secondary"
+          onClick={() => (qIdx > 0 ? setQIdx(q => q - 1) : onBack())}
+        >
           ← Back
         </button>
-        <button className="mk-btn mk-btn-primary" style={{ flex: 1 }} onClick={confirmAnswer}
-          disabled={!draft && !answers[qIdx]}>
-          {qIdx < QUESTIONS.length - 1 ? "Confirm & Next →" : "Review Answers →"}
+        <button
+          className="mk-btn mk-btn-primary"
+          style={{ flex: 1 }}
+          onClick={confirmAnswer}
+          disabled={!draft && !answers[qIdx]}
+        >
+          {qIdx < QUESTIONS.length - 1 ? "Confirm & Next →" : "Confirm Response"}
         </button>
       </div>
 
-      {/* Answer review */}
-      {answers.some(a => a) && (
-        <div>
-          <div className="mk-meta" style={{ fontWeight: 600, marginBottom: 8 }}>Your answers so far</div>
-          {answers.slice(0, qIdx + 1).map((a, i) => a && (
-            <div key={i} style={{ padding: "8px 0", borderBottom: "1px solid var(--mk-border)" }}>
-              <div className="mk-meta" style={{ fontWeight: 600 }}>{QUESTIONS[i]}</div>
-              <div className="mk-body">{a}</div>
-            </div>
-          ))}
-        </div>
-      )}
-
+      {/* Final Submission */}
       {allAnswered && (
-        <div style={{ marginTop: 20 }}>
-          <div className="mk-divider" />
-          <button className="mk-btn mk-btn-primary mk-btn-kiosk" style={{ width: "100%" }} onClick={onSubmit}>
-            Submit Intake →
+        <div style={{
+          marginTop: 20,
+          paddingTop: 16,
+          borderTop: "1px solid var(--mk-border-subtle)",
+        }}>
+          <button
+            className="mk-btn mk-btn-primary mk-btn-kiosk"
+            style={{ width: "100%" }}
+            onClick={onSubmit}
+          >
+            Submit Check-in →
           </button>
         </div>
       )}
@@ -397,62 +550,98 @@ function VoiceIntake({ onSubmit, onBack }: { onSubmit: () => void; onBack: () =>
 
 /* ══════════════════════════════════════════════════════════
    PROCESSING
+   Calm, transparent status transition
 ══════════════════════════════════════════════════════════ */
 function Processing({ onDone }: { onDone: (s: Step) => void }) {
   const [phase, setPhase] = useState(0);
-  const phases = ["Reviewing your responses…", "Analysing indicators…", "Determining priority…", "Almost done…"];
+  const phases = [
+    "Reviewing your reported symptoms…",
+    "Matching with clinical priority guidelines…",
+    "Assigning your care team and room…",
+    "Preparing your care pass…",
+  ];
 
   useEffect(() => {
-    const timers = phases.map((_, i) => setTimeout(() => setPhase(i), i * 900));
-    const done = setTimeout(() => onDone("outcome-p2"), phases.length * 900 + 400);
+    const timers = phases.map((_, i) => setTimeout(() => setPhase(i), i * 700));
+    const done = setTimeout(() => onDone("outcome-p2"), phases.length * 700 + 300);
     return () => { timers.forEach(clearTimeout); clearTimeout(done); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
-    <div style={{ textAlign: "center", padding: "32px 0" }}>
-      <div className="mk-skeleton" style={{ width: 64, height: 64, borderRadius: "50%", margin: "0 auto 24px" }} />
-      <h2 className="mk-page-title" style={{ marginBottom: 8 }}>Processing your information</h2>
-      <p className="mk-body" style={{ color: "var(--mk-text-muted)", marginBottom: 24 }}>{phases[phase]}</p>
-      <div style={{ height: 4, background: "var(--mk-border)", borderRadius: 2, maxWidth: 240, margin: "0 auto" }}>
-        <div style={{ height: "100%", background: "var(--mk-primary)", borderRadius: 2, width: `${((phase + 1) / phases.length) * 100}%`, transition: "width 700ms var(--mk-ease)" }} />
+    <div style={{ textAlign: "center", padding: "36px 0" }}>
+      <div style={{
+        width: 48,
+        height: 48,
+        borderRadius: "50%",
+        background: "var(--mk-surface-subtle)",
+        border: "1px solid var(--mk-border)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        margin: "0 auto 20px",
+        color: "var(--mk-navy)",
+      }}>
+        <IconClock size={24} />
       </div>
-      <p className="mk-meta" style={{ marginTop: 20 }}>We are analysing your information. This is not a diagnosis.</p>
-      {/* Demo outcome switcher */}
-      <div style={{ marginTop: 24, display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
-        {(["outcome-p0","outcome-p1","outcome-p2","outcome-p3"] as Step[]).map(s => (
-          <button key={s} className="mk-btn mk-btn-ghost" style={{ fontSize: 11, height: 28, padding: "0 8px", border: "1px solid var(--mk-border)" }} onClick={() => onDone(s)}>
-            Demo: {s.replace("outcome-","").toUpperCase()}
-          </button>
-        ))}
+
+      <h2 className="mk-page-title" style={{ marginBottom: 6 }}>Reviewing your information</h2>
+      <p className="mk-body" style={{ color: "var(--mk-text-muted)", marginBottom: 24, fontSize: 13 }}>
+        {phases[phase]}
+      </p>
+
+      <div style={{ height: 2, background: "var(--mk-border)", borderRadius: 1, maxWidth: 240, margin: "0 auto" }}>
+        <div style={{
+          height: "100%",
+          background: "var(--mk-navy)",
+          borderRadius: 1,
+          width: `${((phase + 1) / phases.length) * 100}%`,
+          transition: "width 500ms var(--mk-ease)",
+        }} />
       </div>
+
+      <p className="mk-meta" style={{ marginTop: 24, color: "var(--mk-text-subtle)" }}>
+        Clinical safety verification active · Non-diagnostic intake
+      </p>
     </div>
   );
 }
 
 /* ══════════════════════════════════════════════════════════
-   CLARIFICATION
+   CLARIFICATION NEEDED
 ══════════════════════════════════════════════════════════ */
 function ClarificationNeeded({ onSubmit }: { onSubmit: () => void }) {
   const [answer, setAnswer] = useState("");
   return (
     <div>
-      <div className="mk-badge mk-badge-warn" style={{ marginBottom: 16, display: "inline-flex" }}>Clarification Needed</div>
-      <h2 className="mk-page-title" style={{ marginBottom: 8 }}>A little more information</h2>
-      <p className="mk-body" style={{ color: "var(--mk-text-muted)", marginBottom: 24 }}>
-        We need one more piece of information to complete your intake. Please answer the question below.
+      <span className="mk-badge mk-badge-warn" style={{ marginBottom: 12 }}>Clarification Needed</span>
+      <h2 className="mk-page-title" style={{ marginBottom: 6 }}>Additional Clinical Detail</h2>
+      <p className="mk-body" style={{ color: "var(--mk-text-muted)", marginBottom: 20 }}>
+        To ensure accurate allocation, please answer the question below.
       </p>
-      <div className="mk-card mk-card-padded" style={{ background: "var(--mk-warning-soft)", marginBottom: 20 }}>
-        <p className="mk-card-title">Have you experienced any difficulty breathing or chest pain in the last hour?</p>
+
+      <div className="mk-card mk-card-padded" style={{ background: "var(--mk-surface-subtle)", marginBottom: 20 }}>
+        <div className="mk-card-title" style={{ fontSize: 14 }}>
+          Have you experienced any chest pain, dizziness, or sudden shortness of breath in the last hour?
+        </div>
       </div>
-      <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 20 }}>
         {["Yes", "No"].map(opt => (
-          <button key={opt} className={`mk-btn ${answer === opt ? "mk-btn-primary" : "mk-btn-secondary"}`} style={{ flex: 1, minHeight: 52 }} onClick={() => setAnswer(opt)}>{opt}</button>
+          <button
+            key={opt}
+            className={`mk-btn ${answer === opt ? "mk-btn-primary" : "mk-btn-secondary"}`}
+            style={{ minHeight: 48, fontSize: 15 }}
+            onClick={() => setAnswer(opt)}
+          >
+            {opt}
+          </button>
         ))}
       </div>
+
       {answer && (
         <button className="mk-btn mk-btn-primary mk-btn-kiosk" style={{ width: "100%" }} onClick={onSubmit}>
-          Submit Answer →
+          Submit Response →
         </button>
       )}
     </div>
@@ -460,216 +649,419 @@ function ClarificationNeeded({ onSubmit }: { onSubmit: () => void }) {
 }
 
 /* ══════════════════════════════════════════════════════════
-   OUTCOME SCREENS — P0 / P1 / P2 / P3
+   OUTCOME SCREENS (P0 / P1 / P2 / P3)
+   Clean answers to:
+   1. WHERE AM I?
+   2. WHAT HAPPENS NEXT?
+   3. WHAT DO I NEED TO DO?
 ══════════════════════════════════════════════════════════ */
+
+/* P0: Emergency Handover (Calm Clinical Authority) */
 function P0Outcome() {
   const c = CASES.P0;
-  const [elapsed, setElapsed] = useState(0);
-  useEffect(() => { const t = setInterval(() => setElapsed(e => e + 1), 1000); return () => clearInterval(t); }, []);
-  const fmt = (s: number) => `${String(Math.floor(s / 60)).padStart(2,"0")}:${String(s % 60).padStart(2,"0")}`;
+  const [elapsed, setElapsed] = useState(42);
+  const [alertBeacon, setAlertBeacon] = useState(false);
+
+  useEffect(() => {
+    const t = setInterval(() => setElapsed(e => e + 1), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  const fmt = (s: number) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+
+  function toggleBeacon() {
+    setAlertBeacon(true);
+    pushToast("Kiosk Bay 02 emergency beacon active — nursing station notified.", "danger");
+  }
 
   return (
     <div>
-      <div className="mk-p0-banner" style={{ marginBottom: 20, fontSize: 15, justifyContent: "space-between" }}>
-        <span>⚠ URGENT ATTENTION REQUIRED</span>
-        <span>Response timer: {fmt(elapsed)}</span>
+      <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 16 }}>
+        <PriorityBadge priority="P0" full />
+        <h2 className="mk-page-title" style={{ margin: 0, color: "var(--color-crimson)" }}>Emergency Response Protocol</h2>
       </div>
-      <h2 className="mk-display" style={{ color: "var(--mk-danger)", marginBottom: 12 }}>Immediate escalation triggered</h2>
-      <p className="mk-body" style={{ marginBottom: 24 }}>
-        Based on your responses, our system has indicated you may need immediate medical attention. Hospital staff have been alerted. <strong>This is not a diagnosis.</strong>
-      </p>
-      <div className="mk-p0-alert" style={{ marginBottom: 24 }}>
-        <div className="mk-sec-title" style={{ marginBottom: 12 }}>What to do now</div>
-        <ul style={{ paddingLeft: 20, display: "flex", flexDirection: "column", gap: 8 }}>
-          <li className="mk-body"><strong>Remain at this kiosk / your current location.</strong></li>
-          <li className="mk-body">A staff member is on their way to assist you.</li>
-          <li className="mk-body">Do not leave the area — you will be seen shortly.</li>
-          <li className="mk-body">If your condition worsens rapidly, call out for help or press the emergency button nearby.</li>
-        </ul>
-      </div>
-      <CaseTimeline events={c.timeline} />
-      <div className="mk-meta" style={{ marginTop: 24, textAlign: "center", color: "var(--mk-danger)" }}>
-        Case ID: {c.caseId} · No queue token · No admin approval required · Automatic emergency protocol active
+
+      {/* Composed Emergency Operating Pass */}
+      <div className="mk-pass-container" style={{
+        borderLeft: "4px solid var(--color-crimson)",
+        borderColor: "var(--color-crimson-border)",
+        marginBottom: 20,
+      }}>
+        {/* Header Alert Strip */}
+        <div style={{
+          padding: "20px 24px",
+          background: "var(--color-crimson-soft)",
+          borderBottom: "1px solid var(--color-crimson-border)",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: 12,
+        }}>
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+              <span className="mk-badge mk-badge-p0">Code Red Active</span>
+              <span style={{ fontSize: 11, fontWeight: 700, color: "var(--color-crimson)", letterSpacing: "0.05em", textTransform: "uppercase" }}>
+                Response Team Dispatched
+              </span>
+            </div>
+            <div style={{ fontSize: 17, fontWeight: 700, color: "var(--color-text)" }}>
+              Please Remain Seated at Kiosk Bay 02
+            </div>
+          </div>
+
+          <div style={{ textAlign: "right" }}>
+            <div style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", color: "var(--color-crimson)", letterSpacing: "0.05em" }}>
+              Elapsed / Target SLA
+            </div>
+            <div style={{ fontSize: 24, fontWeight: 700, fontFamily: "var(--mk-font-mono)", color: "var(--color-crimson)", lineHeight: 1.1 }}>
+              {fmt(elapsed)}
+            </div>
+            <div style={{ fontSize: 10, fontFamily: "var(--mk-font-mono)", color: "var(--color-text-muted)" }}>
+              Target: &lt; 05:00
+            </div>
+          </div>
+        </div>
+
+        {/* Tactical Guidance Details */}
+        <div>
+          {[
+            { label: "Your Location", value: "Kiosk Bay 02 (Ground Floor Main Concourse)" },
+            { label: "Responding Team", value: "Emergency Trauma Attending & Clinical Nurse" },
+            { label: "Patient Identity", value: `${c.patientName} (${c.patientAge}y · ${c.patientGender})` },
+            { label: "Handover Status", value: "Direct Bedside Clinician Approach" },
+          ].map(({ label, value }) => (
+            <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 24px", borderBottom: "1px solid var(--color-border-subtle)" }}>
+              <span className="mk-meta" style={{ fontWeight: 600 }}>{label}</span>
+              <span className="mk-body" style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text)" }}>{value}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Immediate Instructions */}
+        <div style={{ padding: "16px 24px", background: "var(--color-surface-subtle)", borderBottom: "1px solid var(--color-border-subtle)" }}>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--color-text-muted)", marginBottom: 8 }}>
+            Immediate Safety Protocol
+          </div>
+          <ul style={{ paddingLeft: 18, display: "flex", flexDirection: "column", gap: 4, margin: 0 }}>
+            <li className="mk-body" style={{ fontSize: 13 }}>
+              <strong>Do not leave this chair.</strong> Responders are tracking this terminal station.
+            </li>
+            <li className="mk-body" style={{ fontSize: 13 }}>
+              Clinicians will identify you by name ({c.patientName}) upon arrival.
+            </li>
+            <li className="mk-body" style={{ fontSize: 13 }}>
+              Keep your arms relaxed and take slow, calm breaths.
+            </li>
+          </ul>
+        </div>
+
+        {/* Tactile Emergency Assistance Call Button */}
+        <div style={{ padding: "16px 24px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text)" }}>Need immediate bedside attention?</div>
+            <div className="mk-meta" style={{ fontSize: 11 }}>Tap below to illuminate overhead bay signal beacon.</div>
+          </div>
+          <button
+            type="button"
+            className="mk-btn"
+            style={{
+              background: alertBeacon ? "var(--color-crimson)" : "var(--color-crimson-soft)",
+              color: alertBeacon ? "#ffffff" : "var(--color-crimson)",
+              border: "1px solid var(--color-crimson-border)",
+              minHeight: 38,
+              padding: "0 16px",
+              fontWeight: 600,
+              fontSize: 13,
+            }}
+            onClick={toggleBeacon}
+          >
+            {alertBeacon ? "● Bay Beacon Active" : "Illuminate Bay Beacon"}
+          </button>
+        </div>
+
+        {/* Embedded Timeline */}
+        <div style={{ padding: "18px 24px", borderTop: "1px solid var(--color-border-subtle)" }}>
+          <div className="mk-sec-title" style={{ marginBottom: 12, fontSize: 12 }}>Incident Progression Log</div>
+          <CaseTimeline events={c.timeline} />
+        </div>
       </div>
     </div>
   );
 }
 
+/* P1: Urgent Clinical Handoff */
 function P1Outcome() {
   const c = CASES.P1;
   return (
     <div>
-      <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 20 }}>
+      <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 16 }}>
         <PriorityBadge priority="P1" full />
-        <h2 className="mk-page-title">Urgent Handoff</h2>
+        <h2 className="mk-page-title" style={{ margin: 0 }}>Urgent Clinical Handoff</h2>
       </div>
-      <div className="mk-card mk-card-padded" style={{ borderColor: "var(--mk-warning)", background: "var(--mk-warning-soft)", marginBottom: 20 }}>
-        <p className="mk-card-title" style={{ color: "var(--mk-warning)", marginBottom: 8 }}>Urgent clinical assessment required</p>
-        <p className="mk-body">A clinician has been assigned and is being connected for your case. Please follow the instructions below immediately.</p>
-      </div>
-      {[
-        { label: "Department", value: c.department },
-        { label: "Status", value: "Clinician connecting — urgent handoff in progress" },
-        { label: "Next instruction", value: "Proceed to Reception Desk B and wait for your name to be called" },
-        { label: "ETA", value: c.estimatedWait ?? "~30 minutes" },
-      ].map(({ label, value }) => (
-        <div key={label} style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid var(--mk-border)", padding: "10px 0" }}>
-          <span className="mk-meta" style={{ fontWeight: 600 }}>{label}</span>
-          <span className="mk-body" style={{ textAlign: "right", maxWidth: "60%" }}>{value}</span>
+
+      {/* Composed Urgent Care Pass */}
+      <div className="mk-pass-container" style={{
+        borderLeft: "4px solid var(--color-amber)",
+        borderColor: "var(--color-amber-border)",
+        marginBottom: 20,
+      }}>
+        <div style={{
+          padding: "20px 24px",
+          background: "var(--color-amber-soft)",
+          borderBottom: "1px solid var(--color-amber-border)",
+        }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+            <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--color-amber)" }}>
+              Priority Handoff Reserved
+            </span>
+            <span style={{ fontSize: 11, fontFamily: "var(--mk-font-mono)", color: "var(--color-amber)", fontWeight: 600 }}>
+              Case #{c.caseId}
+            </span>
+          </div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: "var(--color-text)", marginBottom: 4 }}>
+            Please Proceed to Rapid Assessment Bay — Counter B
+          </div>
+          <p className="mk-body" style={{ fontSize: 13, margin: 0 }}>
+            An attending clinician in {c.department} has been alerted and your priority consultation slot is active.
+          </p>
         </div>
-      ))}
-      <div style={{ marginTop: 20 }}>
-        <CaseTimeline events={c.timeline} />
+
+        <div>
+          {[
+            { label: "Designated Location", value: "OPD Rapid Assessment — Room 4" },
+            { label: "Assigned Department", value: c.department },
+            { label: "Expected Consultation", value: c.estimatedWait ?? "Within 15 minutes" },
+            { label: "Priority Level", value: "Immediate Clinician Handoff" },
+          ].map(({ label, value }) => (
+            <div key={label} style={{ display: "flex", justifyContent: "space-between", padding: "12px 24px", borderBottom: "1px solid var(--color-border-subtle)" }}>
+              <span className="mk-meta" style={{ fontWeight: 600 }}>{label}</span>
+              <span className="mk-body" style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text)" }}>{value}</span>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ padding: "14px 24px", background: "var(--color-surface-subtle)", textAlign: "center" }}>
+          <span className="mk-meta">
+            A nursing assistant will announce your name directly at Rapid Assessment Bay.
+          </span>
+        </div>
       </div>
-      <div className="mk-meta" style={{ marginTop: 20, textAlign: "center" }}>Case: {c.caseId} · P1 urgent handoff — not a routine queue</div>
     </div>
   );
 }
 
+/* P2: Standard Queue (Digital Care Pass) */
 function P2Outcome() {
   const c = CASES.P2;
-  const [updates, setUpdates] = useState(3);
-  useEffect(() => {
-    const t = setInterval(() => setUpdates(u => Math.max(0, u - 1)), 8000);
-    return () => clearInterval(t);
-  }, []);
   return (
     <div>
-      <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 20 }}>
+      <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 16 }}>
         <PriorityBadge priority="P2" full />
-        <h2 className="mk-page-title">Standard Queue</h2>
+        <h2 className="mk-page-title" style={{ margin: 0 }}>Standard Clinical Queue</h2>
       </div>
-      <div className="mk-card mk-card-padded" style={{ background: "var(--mk-primary-soft)", marginBottom: 20, textAlign: "center" }}>
-        <div style={{ fontSize: 36, fontWeight: 700, color: "var(--mk-navy)" }}>{c.token}</div>
-        <div className="mk-meta">Your queue token — keep this handy</div>
-        <div className="mk-badge mk-badge-ok" style={{ marginTop: 8 }}>● Token confirmed</div>
-      </div>
-      {[
-        { label: "Department", value: c.department },
-        { label: "Assigned clinician", value: c.doctor },
-        { label: "Queue type", value: "Standard Queue (P2)" },
-        { label: "Patients ahead", value: String(updates) },
-        { label: "Estimated wait", value: c.estimatedWait ?? "~30 min" },
-        { label: "Appointment confirmed", value: "14 Oct 2024, 10:00 AM" },
-      ].map(({ label, value }) => (
-        <div key={label} style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid var(--mk-border)", padding: "10px 0" }}>
-          <span className="mk-meta" style={{ fontWeight: 600 }}>{label}</span>
-          <span className="mk-body">{value}</span>
+
+      {/* Composed Digital Care Pass Object */}
+      <div className="mk-pass-container" style={{ marginBottom: 20 }}>
+        {/* Token Header Bay */}
+        <div style={{
+          padding: "32px 24px 20px",
+          textAlign: "center",
+          background: "#ffffff",
+        }}>
+          <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--color-text-muted)", marginBottom: 6 }}>
+            Your Digital Queue Token
+          </div>
+          <div style={{
+            fontSize: 54,
+            fontWeight: 700,
+            fontFamily: "var(--mk-font-mono)",
+            letterSpacing: "-1.5px",
+            color: "var(--color-brand)",
+            lineHeight: 1,
+            margin: "6px 0 12px",
+          }}>
+            {c.token}
+          </div>
+          <span className="mk-chip">Token Active · Position #3 in Queue</span>
         </div>
-      ))}
-      <div className="mk-card mk-card-padded" style={{ marginTop: 20 }}>
-        <div className="mk-sec-title" style={{ marginBottom: 8 }}>What to do next</div>
-        <ol style={{ paddingLeft: 20, display: "flex", flexDirection: "column", gap: 6 }}>
-          <li className="mk-body">Take a seat in the General Medicine waiting area.</li>
-          <li className="mk-body">Keep token <strong>{c.token}</strong> handy — you&apos;ll be notified when it&apos;s your turn.</li>
-          <li className="mk-body">If symptoms worsen, return to this kiosk or inform staff immediately.</li>
-        </ol>
+
+        {/* Perforated dashed notch divider */}
+        <div className="mk-pass-notch-divider">
+          <div className="mk-pass-dashed-line" />
+        </div>
+
+        {/* Ticket Details */}
+        <div>
+          {[
+            { label: "Assigned Area", value: "Waiting Lounge C (Level 1)" },
+            { label: "Target Department", value: c.department },
+            { label: "Attending Clinician", value: c.doctor },
+            { label: "Estimated Wait Window", value: c.estimatedWait ?? "~25 minutes" },
+          ].map(({ label, value }) => (
+            <div key={label} style={{ display: "flex", justifyContent: "space-between", padding: "13px 24px", borderBottom: "1px solid var(--color-border-subtle)" }}>
+              <span className="mk-meta" style={{ fontWeight: 600 }}>{label}</span>
+              <span className="mk-body" style={{ fontSize: 13, fontWeight: 500, color: "var(--color-text)" }}>{value}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Next Steps Guidance */}
+        <div style={{ padding: "18px 24px", background: "var(--color-surface-subtle)" }}>
+          <div className="mk-sec-title" style={{ marginBottom: 8, fontSize: 12, color: "var(--color-text)" }}>What happens next</div>
+          <ol style={{ paddingLeft: 18, display: "flex", flexDirection: "column", gap: 4, margin: 0 }}>
+            <li className="mk-meta" style={{ fontSize: 12, color: "var(--color-text-body)" }}>Take a seat in Waiting Lounge C on Level 1.</li>
+            <li className="mk-meta" style={{ fontSize: 12, color: "var(--color-text-body)" }}>Display screens will announce token <strong style={{ color: "var(--color-brand)" }}>{c.token}</strong> when ready.</li>
+            <li className="mk-meta" style={{ fontSize: 12, color: "var(--color-text-body)" }}>If symptoms suddenly worsen, inform the nearest nurse desk immediately.</li>
+          </ol>
+        </div>
       </div>
     </div>
   );
 }
 
+/* P3: Fast Track (Digital Care Pass) */
 function P3Outcome() {
   const c = CASES.P3;
   return (
     <div>
-      <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 20 }}>
+      <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 16 }}>
         <PriorityBadge priority="P3" full />
-        <h2 className="mk-page-title">Fast Track</h2>
+        <h2 className="mk-page-title" style={{ margin: 0 }}>Rapid Fast Track</h2>
       </div>
-      <div className="mk-card mk-card-padded" style={{ borderColor: "var(--mk-success)", background: "var(--mk-success-soft)", marginBottom: 20, textAlign: "center" }}>
-        <div style={{ fontSize: 36, fontWeight: 700, color: "var(--mk-success)" }}>{c.token}</div>
-        <div className="mk-meta">Fast Track token</div>
-        <div className="mk-badge mk-badge-p3" style={{ marginTop: 8 }}>Fast Track (P3)</div>
-      </div>
-      {[
-        { label: "Location", value: "Fast Track — Level 1, Counter 3" },
-        { label: "Department", value: c.department },
-        { label: "Patients ahead", value: String(c.patientsAhead) },
-        { label: "Estimated wait", value: c.estimatedWait ?? "~10 min" },
-      ].map(({ label, value }) => (
-        <div key={label} style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid var(--mk-border)", padding: "10px 0" }}>
-          <span className="mk-meta" style={{ fontWeight: 600 }}>{label}</span>
-          <span className="mk-body">{value}</span>
+
+      {/* Composed Digital Fast Track Pass */}
+      <div className="mk-pass-container" style={{ marginBottom: 20 }}>
+        <div style={{
+          padding: "32px 24px 20px",
+          textAlign: "center",
+          background: "#ffffff",
+        }}>
+          <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--color-text-muted)", marginBottom: 6 }}>
+            Fast Track Token
+          </div>
+          <div style={{
+            fontSize: 54,
+            fontWeight: 700,
+            fontFamily: "var(--mk-font-mono)",
+            letterSpacing: "-1.5px",
+            color: "var(--color-green)",
+            lineHeight: 1,
+            margin: "6px 0 12px",
+          }}>
+            {c.token}
+          </div>
+          <span className="mk-badge mk-badge-p3">Minor Care Rapid Bay</span>
         </div>
-      ))}
-      <div className="mk-card mk-card-padded" style={{ marginTop: 20, background: "var(--mk-warning-soft)", borderColor: "var(--mk-warning)" }}>
-        <div className="mk-sec-title" style={{ marginBottom: 8 }}>⚠ Safety guidance</div>
-        <p className="mk-body">If symptoms worsen — fever above 103°F, difficulty breathing, or chest pain — return to the main desk immediately. Do not remain in the fast-track queue if your condition changes.</p>
+
+        {/* Perforated dashed notch divider */}
+        <div className="mk-pass-notch-divider">
+          <div className="mk-pass-dashed-line" />
+        </div>
+
+        <div>
+          {[
+            { label: "Designated Area", value: "Level 1, Fast Track Counter 3" },
+            { label: "Department", value: c.department },
+            { label: "Patients Ahead", value: String(c.patientsAhead) },
+            { label: "Estimated Wait", value: c.estimatedWait ?? "~10 minutes" },
+          ].map(({ label, value }) => (
+            <div key={label} style={{ display: "flex", justifyContent: "space-between", padding: "13px 24px", borderBottom: "1px solid var(--color-border-subtle)" }}>
+              <span className="mk-meta" style={{ fontWeight: 600 }}>{label}</span>
+              <span className="mk-body" style={{ fontSize: 13, fontWeight: 500, color: "var(--color-text)" }}>{value}</span>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ padding: "14px 24px", textAlign: "center", background: "var(--color-surface-subtle)" }}>
+          <span className="mk-meta">
+            A nursing assistant will call token <strong style={{ color: "var(--color-green)" }}>{c.token}</strong> at Counter 3.
+          </span>
+        </div>
       </div>
-      <div className="mk-meta" style={{ marginTop: 16, textAlign: "center" }}>A helper will guide you to the Fast Track area · {c.caseId}</div>
     </div>
   );
 }
 
 /* ══════════════════════════════════════════════════════════
    POST-CONSULTATION DASHBOARD
+   Linear/Notion-grade patient records, zero AI slop
 ══════════════════════════════════════════════════════════ */
-type DashTab = "summary" | "prescription" | "reports" | "followup" | "records" | "profile";
+type DashTab = "summary" | "prescription" | "reports" | "followup" | "records";
 
 function PostConsultDashboard() {
   const [tab, setTab] = useState<DashTab>("summary");
-  const tabs: Array<{ id: DashTab; label: string; icon: string }> = [
-    { id: "summary", label: "Visit Summary", icon: "📋" },
-    { id: "prescription", label: "Prescription", icon: "💊" },
-    { id: "reports", label: "Lab Reports", icon: "🧪" },
-    { id: "followup", label: "Follow-up", icon: "📅" },
-    { id: "records", label: "Past Records", icon: "📁" },
-    { id: "profile", label: "Profile", icon: "👤" },
+  const tabs: Array<{ id: DashTab; label: string; icon: React.ReactNode }> = [
+    { id: "summary", label: "Visit Summary", icon: <IconFileText size={14} /> },
+    { id: "prescription", label: "Prescriptions", icon: <IconPill size={14} /> },
+    { id: "reports", label: "Lab Orders", icon: <IconActivity size={14} /> },
+    { id: "followup", label: "Follow-Up", icon: <IconClock size={14} /> },
+    { id: "records", label: "History", icon: <IconCheckCircle size={14} /> },
   ];
 
   return (
     <div>
-      {/* Patient header */}
-      <div className="mk-card mk-card-padded" style={{ marginBottom: 20, display: "flex", gap: 16, alignItems: "center" }}>
-        <div style={{ width: 44, height: 44, borderRadius: "50%", background: "var(--mk-primary)", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 18, flexShrink: 0 }}>RM</div>
-        <div style={{ flex: 1 }}>
-          <div className="mk-card-title">Rohan Mehta</div>
-          <div className="mk-meta">ABHA-2048-XXXX · {CASES.P2.caseId}</div>
+      {/* Patient Card */}
+      <div style={{
+        background: "var(--mk-surface)",
+        border: "1px solid var(--mk-border)",
+        borderRadius: "var(--mk-radius-md)",
+        padding: "20px 24px",
+        marginBottom: 20,
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        flexWrap: "wrap",
+        gap: 12,
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          <div style={{
+            width: 40,
+            height: 40,
+            borderRadius: "var(--mk-radius-xs)",
+            background: "var(--mk-surface-subtle)",
+            border: "1px solid var(--mk-border)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontWeight: 700,
+            fontSize: 14,
+            color: "var(--mk-navy)",
+          }}>
+            RM
+          </div>
+          <div>
+            <div style={{ fontWeight: 600, fontSize: 15, color: "var(--mk-navy)" }}>Rohan Mehta, 38y</div>
+            <div className="mk-meta" style={{ fontSize: 11 }}>ABHA-2048-XXXX · Encounter: 14 Oct 2024</div>
+          </div>
         </div>
-        <div>
-          <div className="mk-meta">Latest visit</div>
-          <div className="mk-body">14 Oct 2024, 11:00 AM</div>
-        </div>
-        <Link href="/patient/new-visit">
-          <button className="mk-btn mk-btn-primary">+ New Visit</button>
+        <Link href="/patient">
+          <button className="mk-btn mk-btn-secondary" style={{ fontSize: 12, minHeight: 32 }}>
+            + New Intake
+          </button>
         </Link>
       </div>
 
-      {/* Quick stats */}
-      <div className="mk-kpi-grid" style={{ marginBottom: 20 }}>
-        {[
-          { label: "Prescriptions", value: "3", icon: "💊" },
-          { label: "Lab Reports", value: "2", icon: "🧪" },
-          { label: "Follow-up", value: "21 Oct", icon: "📅" },
-          { label: "Past Records", value: "4", icon: "📁" },
-        ].map(({ label, value, icon }) => (
-          <div className="mk-kpi" key={label} style={{ cursor: "pointer" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-              <span className="mk-meta" style={{ fontWeight: 600 }}>{label}</span>
-              <span>{icon}</span>
-            </div>
-            <div className="mk-kpi-value" style={{ fontSize: 22 }}>{value}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* Bottom tabs */}
-      <div className="mk-tabs" style={{ marginBottom: 20, overflowX: "auto" }}>
+      {/* Tabs */}
+      <div className="mk-tabs" style={{ marginBottom: 20 }}>
         {tabs.map(t => (
-          <span key={t.id} className={`mk-tab ${tab === t.id ? "active" : ""}`} onClick={() => setTab(t.id)}
-            style={{ display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap" }}>
-            {t.icon} {t.label}
+          <span
+            key={t.id}
+            className={`mk-tab ${tab === t.id ? "active" : ""}`}
+            onClick={() => setTab(t.id)}
+            style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+          >
+            {t.icon}
+            <span>{t.label}</span>
           </span>
         ))}
       </div>
 
-      {tab === "summary"      && <VisitSummary />}
+      {tab === "summary" && <VisitSummary />}
       {tab === "prescription" && <PrescriptionView />}
-      {tab === "reports"      && <LabReports />}
-      {tab === "followup"     && <FollowUp />}
-      {tab === "records"      && <PastRecords />}
-      {tab === "profile"      && <ProfileSettings />}
+      {tab === "reports" && <LabReports />}
+      {tab === "followup" && <FollowUp />}
+      {tab === "records" && <PastRecords />}
     </div>
   );
 }
@@ -677,132 +1069,135 @@ function PostConsultDashboard() {
 function VisitSummary() {
   return (
     <div className="mk-card mk-card-padded">
-      <div className="mk-sec-title" style={{ marginBottom: 16 }}>Visit Summary</div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+        <div className="mk-sec-title" style={{ margin: 0 }}>Consultation Summary</div>
+        <span className="mk-badge mk-badge-ok">Physician Signed</span>
+      </div>
+
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))",
+        gap: 10,
+        padding: "10px 14px",
+        background: "var(--mk-surface-subtle)",
+        borderRadius: "var(--mk-radius-xs)",
+        marginBottom: 16,
+      }}>
+        {[
+          { label: "Temp", val: "99.1°F" },
+          { label: "Pulse", val: "84 bpm" },
+          { label: "SpO₂", val: "98%" },
+          { label: "BP", val: "123/78" },
+        ].map(v => (
+          <div key={v.label}>
+            <div className="mk-meta" style={{ fontSize: 10 }}>{v.label}</div>
+            <div style={{ fontSize: 13, fontWeight: 600, fontFamily: "var(--mk-font-mono)", color: "var(--mk-navy)" }}>{v.val}</div>
+          </div>
+        ))}
+      </div>
+
       {[
-        { label: "Doctor", value: "Dr. R. Vance" },
-        { label: "Department", value: "General Medicine" },
-        { label: "Date & Time", value: "14 Oct 2024, 11:00 AM" },
-        { label: "Case ID", value: CASES.P2.caseId },
+        { label: "Attending Clinician", value: "Dr. R. Vance, MD (General Medicine)" },
+        { label: "Encounter Time", value: "14 Oct 2024, 11:00 AM" },
+        { label: "Clinical Facility", value: "Hospital Central · OPD Room 12" },
       ].map(({ label, value }) => (
-        <div key={label} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid var(--mk-border)" }}>
+        <div key={label} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid var(--mk-border-subtle)" }}>
           <span className="mk-meta" style={{ fontWeight: 600 }}>{label}</span>
-          <span className="mk-body">{value}</span>
+          <span className="mk-body" style={{ fontSize: 13 }}>{value}</span>
         </div>
       ))}
-      <div style={{ marginTop: 16 }}>
-        <div className="mk-meta" style={{ fontWeight: 600, marginBottom: 6 }}>Clinical Summary</div>
-        <p className="mk-body">Acute viral upper respiratory infection (J06.9). Mild fever and cough, 2 days. On examination chest clear, vitals stable. Likely viral URTI.</p>
-        <div className="mk-meta" style={{ fontWeight: 600, marginBottom: 6, marginTop: 12 }}>Next Steps</div>
-        <p className="mk-body">Take medications as prescribed. Stay hydrated. Return if fever persists beyond 3 days or breathlessness develops.</p>
+
+      <div style={{ marginTop: 14 }}>
+        <div className="mk-meta" style={{ fontWeight: 600, marginBottom: 4 }}>Clinical Impression</div>
+        <p className="mk-body" style={{ fontSize: 13, color: "var(--mk-text)", lineHeight: 1.5 }}>
+          Acute viral upper respiratory tract infection. Mild fever and non-productive cough for 2 days. Chest clear on bilateral auscultation, vitals within normal parameters.
+        </p>
       </div>
-      <p className="mk-meta" style={{ marginTop: 16, fontStyle: "italic" }}>Record published after doctor sign-off on 14 Oct 2024 at 11:42 AM.</p>
     </div>
   );
 }
 
 function PrescriptionView() {
-  const [downloading, setDownloading] = useState<string | null>(null);
+  const [taken, setTaken] = useState<Record<string, boolean>>({});
   const rxItems = [
-    { name: "Paracetamol 500mg", dose: "1 tablet × 3 times/day", duration: "3 days", instructions: "Take after meals" },
-    { name: "Cetirizine 10mg", dose: "1 tablet × at night", duration: "5 days", instructions: "May cause drowsiness" },
-    { name: "Dextromethorphan syrup", dose: "10 ml × 3 times/day", duration: "3 days", instructions: "Shake well before use" },
+    { id: "pcm", name: "Paracetamol 500mg", dose: "1 tablet 3x daily", duration: "3 days", timing: "After meals" },
+    { id: "cet", name: "Cetirizine 10mg", dose: "1 tablet at night", duration: "5 days", timing: "Bedtime" },
+    { id: "dxm", name: "Dextromethorphan syrup", dose: "10 ml 3x daily", duration: "3 days", timing: "Every 8 hours" },
   ];
 
-  function download(name: string) {
-    setDownloading(name);
-    setTimeout(() => { setDownloading(null); pushToast(`${name} prescription downloaded`, "success"); }, 1500);
+  function toggleTaken(id: string, name: string) {
+    setTaken(prev => {
+      const next = !prev[id];
+      pushToast(`${name} marked as ${next ? "taken" : "pending"}`, "info");
+      return { ...prev, [id]: next };
+    });
   }
 
   return (
-    <div>
-      <div className="mk-card mk-card-padded" style={{ marginBottom: 16 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-          <div className="mk-sec-title">Prescription</div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button className="mk-btn mk-btn-secondary" style={{ fontSize: 12, minHeight: 32 }}>🖨 Print</button>
-            <button className="mk-btn mk-btn-secondary" style={{ fontSize: 12, minHeight: 32 }} onClick={() => pushToast("Confirmation sent to +91 98765 43210", "success")}>📤 Share (SMS)</button>
+    <div className="mk-card mk-card-padded">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+        <div className="mk-sec-title" style={{ margin: 0 }}>Prescription &amp; Medication Schedule</div>
+        <button
+          className="mk-btn mk-btn-secondary"
+          style={{ fontSize: 12, minHeight: 30 }}
+          onClick={() => pushToast("Prescription PDF dispatched to print queue", "success")}
+        >
+          Print Prescription
+        </button>
+      </div>
+
+      {rxItems.map(rx => (
+        <div key={rx.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0", borderBottom: "1px solid var(--mk-border-subtle)" }}>
+          <div>
+            <div style={{ fontWeight: 600, fontSize: 13, color: "var(--mk-text)" }}>{rx.name}</div>
+            <div className="mk-meta">{rx.dose} · {rx.duration} ({rx.timing})</div>
           </div>
+          <button
+            className={`mk-btn ${taken[rx.id] ? "mk-btn-secondary" : "mk-btn-primary"}`}
+            style={{ fontSize: 11, minHeight: 28, padding: "0 10px" }}
+            onClick={() => toggleTaken(rx.id, rx.name)}
+          >
+            {taken[rx.id] ? "✓ Taken" : "Log Dose"}
+          </button>
         </div>
-        {rxItems.map(rx => (
-          <div key={rx.name} style={{ padding: "12px 0", borderBottom: "1px solid var(--mk-border)" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-              <div>
-                <div className="mk-card-title">{rx.name}</div>
-                <div className="mk-meta">{rx.dose} · {rx.duration}</div>
-                <div className="mk-meta" style={{ color: "var(--mk-text-muted)" }}>{rx.instructions}</div>
-              </div>
-              <button className="mk-btn mk-btn-ghost" style={{ fontSize: 12, minHeight: 32 }} onClick={() => download(rx.name)}>
-                {downloading === rx.name ? "⏳" : "⬇"}
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
-      <div className="mk-meta" style={{ textAlign: "center" }}>
-        Prescription published 14 Oct 2024 after doctor sign-off. Download requires your confirmation.
-      </div>
+      ))}
     </div>
   );
 }
 
 function LabReports() {
   return (
-    <div>
-      <div className="mk-card mk-card-padded" style={{ marginBottom: 16 }}>
-        <div className="mk-sec-title" style={{ marginBottom: 16 }}>Lab Reports</div>
-        {[
-          { name: "CBC — Blood Count", date: "14 Oct 2024", status: "available", result: "Normal" },
-          { name: "Chest X-Ray", date: "14 Oct 2024", status: "available", result: "View" },
-        ].map(r => (
-          <div key={r.name} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0", borderBottom: "1px solid var(--mk-border)" }}>
-            <div>
-              <div className="mk-card-title">{r.name}</div>
-              <div className="mk-meta">{r.date}</div>
-            </div>
-            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <span className={`mk-badge ${r.result === "Normal" ? "mk-badge-ok" : "mk-badge-info"}`}>{r.result}</span>
-              <button className="mk-btn mk-btn-secondary" style={{ fontSize: 12, minHeight: 32 }} onClick={() => pushToast(`Opening ${r.name}`, "info")}>View</button>
-              <button className="mk-btn mk-btn-ghost" style={{ fontSize: 12, minHeight: 32 }}>⬇</button>
-            </div>
+    <div className="mk-card mk-card-padded">
+      <div className="mk-sec-title" style={{ marginBottom: 14 }}>Diagnostic Orders</div>
+      {[
+        { name: "CBC — Complete Blood Count", date: "14 Oct 2024", result: "Normal", labId: "LAB-8821" },
+        { name: "Chest X-Ray (PA View)", date: "14 Oct 2024", result: "Clear", labId: "RAD-4402" },
+      ].map(r => (
+        <div key={r.name} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: "1px solid var(--mk-border-subtle)" }}>
+          <div>
+            <div style={{ fontWeight: 600, fontSize: 13 }}>{r.name}</div>
+            <div className="mk-meta">{r.date} · Order #{r.labId}</div>
           </div>
-        ))}
-      </div>
-      <div className="mk-card mk-card-padded" style={{ background: "var(--mk-warning-soft)", borderColor: "var(--mk-warning)" }}>
-        <div className="mk-meta" style={{ fontWeight: 600 }}>Pending reports</div>
-        <p className="mk-body">Some reports may not be immediately available. You will be notified when they are ready.</p>
-      </div>
+          <span className="mk-badge mk-badge-ok">{r.result}</span>
+        </div>
+      ))}
     </div>
   );
 }
 
 function FollowUp() {
   return (
-    <div>
-      <div className="mk-card mk-card-padded" style={{ marginBottom: 16 }}>
-        <div className="mk-sec-title" style={{ marginBottom: 16 }}>Follow-up &amp; Reminders</div>
-        <div style={{ padding: "12px 0", borderBottom: "1px solid var(--mk-border)" }}>
-          <div className="mk-card-title">Next Visit</div>
-          <div className="mk-body">21 Oct 2024, 10:30 AM · Dr. R. Vance · General Medicine</div>
-          <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-            <button className="mk-btn mk-btn-primary" style={{ fontSize: 12, minHeight: 32 }} onClick={() => pushToast("Added to calendar", "success")}>+ Add to Calendar</button>
-            <button className="mk-btn mk-btn-secondary" style={{ fontSize: 12, minHeight: 32 }}>Get Reminder (SMS/WhatsApp)</button>
-          </div>
-        </div>
-        <div style={{ padding: "12px 0" }}>
-          <div className="mk-meta" style={{ fontWeight: 600, marginBottom: 6 }}>Reminders</div>
-          <ul style={{ paddingLeft: 20, display: "flex", flexDirection: "column", gap: 6 }}>
-            <li className="mk-body">Take medicines as prescribed.</li>
-            <li className="mk-body">Monitor temperature daily.</li>
-            <li className="mk-body">Return earlier if symptoms worsen.</li>
-          </ul>
-        </div>
+    <div className="mk-card mk-card-padded">
+      <div className="mk-sec-title" style={{ marginBottom: 10 }}>Scheduled Follow-Up</div>
+      <div style={{ padding: "10px 0", borderBottom: "1px solid var(--mk-border-subtle)" }}>
+        <div style={{ fontWeight: 600, fontSize: 14 }}>General Medicine Follow-Up Consultation</div>
+        <div className="mk-meta" style={{ marginTop: 2 }}>21 Oct 2024, 10:30 AM · Dr. R. Vance · OPD Room 12</div>
       </div>
-      <div className="mk-card mk-card-padded" style={{ background: "var(--mk-warning-soft)", borderColor: "var(--mk-warning)" }}>
-        <div className="mk-sec-title" style={{ marginBottom: 8 }}>⚠ When to seek immediate help</div>
-        <p className="mk-body">Return to the hospital immediately if you develop breathlessness, chest pain, confusion, or fever above 103°F.</p>
-        <button className="mk-btn mk-btn-danger" style={{ marginTop: 12 }} onClick={() => pushToast("Routing you to intake for a new assessment", "info")}>
-          Start New Intake →
-        </button>
+      <div style={{ marginTop: 14 }}>
+        <div className="mk-meta" style={{ fontWeight: 600, marginBottom: 4 }}>Warning Signs</div>
+        <p className="mk-body" style={{ fontSize: 13, color: "var(--mk-text-muted)" }}>
+          Return to emergency care immediately if you develop high fever (&gt;102°F), acute chest pressure, or difficulty breathing.
+        </p>
       </div>
     </div>
   );
@@ -812,113 +1207,96 @@ function PastRecords() {
   const records = [
     { date: "14 Oct 2024", diagnosis: "Acute viral URTI (J06.9)", doctor: "Dr. R. Vance" },
     { date: "12 Aug 2024", diagnosis: "Seasonal allergic rhinitis", doctor: "Dr. K. Iyer" },
-    { date: "21 Jan 2024", diagnosis: "Viral fever", doctor: "Dr. R. Vance" },
-    { date: "03 Sep 2023", diagnosis: "Annual general checkup", doctor: "Dr. M. Sharma" },
+    { date: "21 Jan 2024", diagnosis: "Viral upper respiratory infection", doctor: "Dr. R. Vance" },
   ];
   return (
-    <div className="mk-card">
-      <div style={{ padding: "16px 16px 12px" }}>
-        <div className="mk-sec-title">Past Records</div>
-      </div>
+    <div className="mk-card mk-card-padded">
+      <div className="mk-sec-title" style={{ marginBottom: 12 }}>Past Visits</div>
       {records.map(r => (
-        <div key={r.date} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", borderTop: "1px solid var(--mk-border)" }}>
+        <div key={r.date} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: "1px solid var(--mk-border-subtle)" }}>
           <div>
-            <div className="mk-body" style={{ fontWeight: 600 }}>{r.diagnosis}</div>
+            <div style={{ fontWeight: 600, fontSize: 13 }}>{r.diagnosis}</div>
             <div className="mk-meta">{r.date} · {r.doctor}</div>
           </div>
-          <button className="mk-btn mk-btn-secondary" style={{ fontSize: 12, minHeight: 32 }}>View</button>
+          <span className="mk-meta">Verified</span>
         </div>
       ))}
     </div>
   );
 }
 
-function ProfileSettings() {
-  const [notifPref, setNotifPref] = useState("SMS");
-  const [saved, setSaved] = useState(false);
-  function save() { setSaved(true); pushToast("Profile updated", "success"); setTimeout(() => setSaved(false), 2000); }
-  return (
-    <div className="mk-card mk-card-padded">
-      <div className="mk-sec-title" style={{ marginBottom: 20 }}>Profile &amp; Settings</div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-        <div>
-          <label className="mk-label">Language</label>
-          <select className="mk-input" style={{ height: 40 }}>
-            {["English", "हिंदी", "मराठी", "தமிழ்", "বাংলা"].map(l => <option key={l}>{l}</option>)}
-          </select>
-        </div>
-        <div>
-          <label className="mk-label">Notification Preference</label>
-          <div style={{ display: "flex", gap: 10 }}>
-            {["SMS", "WhatsApp", "None"].map(opt => (
-              <button key={opt} className={`mk-btn ${notifPref === opt ? "mk-btn-primary" : "mk-btn-secondary"}`} style={{ flex: 1 }} onClick={() => setNotifPref(opt)}>{opt}</button>
-            ))}
-          </div>
-        </div>
-        <div>
-          <label className="mk-label">Mobile</label>
-          <input className="mk-input" defaultValue="+91 98765 43210" />
-        </div>
-        <div>
-          <label className="mk-label">ABHA ID</label>
-          <input className="mk-input" defaultValue="ABHA-2048-XXXX" />
-        </div>
-        <div className="mk-divider" />
-        <div>
-          <div className="mk-meta" style={{ fontWeight: 600, marginBottom: 8 }}>Privacy &amp; Data</div>
-          <p className="mk-body" style={{ color: "var(--mk-text-muted)" }}>Your data is used only for clinical intake. AI receives anonymised intake data only. You may request data deletion by contacting your hospital.</p>
-        </div>
-        <button className="mk-btn mk-btn-primary" onClick={save}>{saved ? "✓ Saved" : "Save Changes"}</button>
-      </div>
-    </div>
-  );
-}
-
 /* ══════════════════════════════════════════════════════════
-   MAIN PATIENT PAGE
+   MAIN PATIENT PAGE WRAPPER
 ══════════════════════════════════════════════════════════ */
 export default function PatientPage() {
   const [step, setStep] = useState<Step>("welcome");
   const isOutcome = step.startsWith("outcome-");
   const isDashboard = step === "dashboard";
-  const stepIndex = STEP_INDICES[step] ?? 5;
+  const stepIndex = STEP_INDICES[step] ?? 0;
 
   return (
-    <div className="mk-kiosk" style={{ padding: "24px 16px" }}>
-      <div className="mk-kiosk-panel" style={isDashboard ? { maxWidth: 760 } : {}}>
+    <div className="mk-kiosk">
+      <div className="mk-kiosk-panel" style={isDashboard ? { maxWidth: 680 } : {}}>
         {!isOutcome && !isDashboard && step !== "processing" && <Stepper current={stepIndex} />}
 
-        {step === "welcome"       && <Welcome onNext={() => setStep("consent")} />}
-        {step === "consent"       && <Consent onNext={() => setStep("identity")} onBack={() => setStep("welcome")} />}
-        {step === "identity"      && <Identity onNext={() => setStep("otp")} onBack={() => setStep("consent")} />}
-        {step === "otp"           && <OTPVerify onNext={() => setStep("intake")} onBack={() => setStep("identity")} />}
-        {step === "intake"        && <VoiceIntake onSubmit={() => setStep("processing")} onBack={() => setStep("otp")} />}
-        {step === "processing"    && <Processing onDone={s => setStep(s)} />}
-        {step === "clarification" && <ClarificationNeeded onSubmit={() => setStep("processing")} />}
-        {step === "outcome-p0"    && <P0Outcome />}
-        {step === "outcome-p1"    && <P1Outcome />}
-        {step === "outcome-p2"    && <P2Outcome />}
-        {step === "outcome-p3"    && <P3Outcome />}
-        {step === "dashboard"     && <PostConsultDashboard />}
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={step}
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ duration: 0.15 }}
+          >
+            {step === "welcome"       && <Welcome onNext={() => setStep("consent")} />}
+            {step === "consent"       && <Consent onNext={() => setStep("identity")} onBack={() => setStep("welcome")} />}
+            {step === "identity"      && <Identity onNext={() => setStep("otp")} onBack={() => setStep("consent")} />}
+            {step === "otp"           && <OTPVerify onNext={() => setStep("intake")} onBack={() => setStep("identity")} />}
+            {step === "intake"        && <VoiceIntake onSubmit={() => setStep("processing")} onBack={() => setStep("otp")} />}
+            {step === "processing"    && <Processing onDone={s => setStep(s)} />}
+            {step === "clarification" && <ClarificationNeeded onSubmit={() => setStep("processing")} />}
+            {step === "outcome-p0"    && <P0Outcome />}
+            {step === "outcome-p1"    && <P1Outcome />}
+            {step === "outcome-p2"    && <P2Outcome />}
+            {step === "outcome-p3"    && <P3Outcome />}
+            {step === "dashboard"     && <PostConsultDashboard />}
+          </motion.div>
+        </AnimatePresence>
 
         {/* Footer actions */}
-        <div style={{ marginTop: 28, paddingTop: 20, borderTop: "1px solid var(--mk-border)", display: "flex", gap: 10, flexWrap: "wrap" }}>
-          {(isOutcome || isDashboard) && (
-            <button className="mk-btn mk-btn-ghost" style={{ fontSize: 12 }} onClick={() => setStep("welcome")}>← Start New Visit</button>
-          )}
-          {isOutcome && step !== "outcome-p0" && (
-            <button className="mk-btn mk-btn-secondary" style={{ fontSize: 12 }} onClick={() => setStep("dashboard")}>View Dashboard →</button>
-          )}
-          {/* Demo shortcuts */}
-          {!isDashboard && (
-            <button className="mk-btn mk-btn-ghost" style={{ fontSize: 11, marginLeft: "auto", color: "var(--mk-text-muted)" }} onClick={() => setStep("dashboard")}>Demo: Post-consultation dashboard</button>
-          )}
-        </div>
+        {(isOutcome || isDashboard) && (
+          <div style={{
+            marginTop: 24,
+            paddingTop: 16,
+            borderTop: "1px solid var(--mk-border-subtle)",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}>
+            <button
+              className="mk-btn mk-btn-ghost"
+              style={{ fontSize: 12 }}
+              onClick={() => setStep("welcome")}
+            >
+              ← Start New Intake
+            </button>
+            {isOutcome && step !== "outcome-p0" && (
+              <button
+                className="mk-btn mk-btn-secondary"
+                style={{ fontSize: 12 }}
+                onClick={() => setStep("dashboard")}
+              >
+                Patient Dashboard →
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
-      <p className="mk-meta" style={{ textAlign: "center", marginTop: 16 }}>
-        MediKiosk · Not a diagnosis tool · Doctor makes all final clinical decisions
-      </p>
+      <footer style={{ textAlign: "center", marginTop: 12 }}>
+        <p className="mk-meta" style={{ color: "var(--mk-text-subtle)" }}>
+          MediKiosk Patient Care · Non-diagnostic clinical intake · Attending clinician verified
+        </p>
+      </footer>
       <ToastContainer />
     </div>
   );

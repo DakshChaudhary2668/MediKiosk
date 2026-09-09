@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { uploadDocument, listDocuments } from '@/lib/api';
+import { IconFileText, IconAlertTriangle } from "@/components/icons";
 
 export default function DocumentsPage() {
   const router = useRouter();
@@ -41,18 +42,28 @@ export default function DocumentsPage() {
   return (
     <main className="container" style={{ paddingTop: '2rem' }}>
       <div className="card">
-        <div className="logo-mark">
-          <span className="icon">📋</span>
+        <div className="logo-mark" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <IconFileText size={22} color="var(--mk-primary)" />
           <span>Medical Documents</span>
         </div>
 
         <p className="page-subtitle">Upload any relevant medical reports, prescriptions, or test results (optional)</p>
 
-        {error && <div className="alert alert-danger">⚠️ {error}</div>}
+        {error && (
+          <div className="alert alert-danger" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <IconAlertTriangle size={16} />
+            <span>{error}</span>
+          </div>
+        )}
 
         <div style={{ marginBottom: 'var(--space-lg)' }}>
-          <label className="btn btn-secondary" style={{ position: 'relative', overflow: 'hidden' }}>
-            {uploading ? <span className="spinner" /> : '📎 Upload Document'}
+          <label className="btn btn-secondary" style={{ position: 'relative', overflow: 'hidden', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            {uploading ? <span className="spinner" /> : (
+              <>
+                <IconFileText size={16} />
+                <span>Upload Document</span>
+              </>
+            )}
             <input
               type="file"
               accept="image/*,application/pdf"
@@ -70,7 +81,10 @@ export default function DocumentsPage() {
             <p className="label" style={{ marginBottom: 'var(--space-sm)' }}>Uploaded ({docs.length})</p>
             {docs.map((doc, i) => (
               <div key={i} style={{ padding: 'var(--space-sm) var(--space-md)', background: 'var(--color-surface-alt)', borderRadius: 'var(--radius-sm)', marginBottom: 'var(--space-xs)', fontSize: '0.8125rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span>📄 {String(doc.file_name)}</span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <IconFileText size={14} />
+                  <span>{String(doc.file_name)}</span>
+                </span>
                 <span style={{ color: 'var(--color-text-muted)', fontSize: '0.75rem' }}>
                   {new Date(String(doc.uploaded_at)).toLocaleDateString()}
                 </span>

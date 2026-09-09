@@ -10,6 +10,15 @@ import {
   PatientQueueStatus,
   clearToken,
 } from '@/lib/api';
+import {
+  IconHospital,
+  IconShield,
+  IconStethoscope,
+  IconClock,
+  IconAlertTriangle,
+  IconFileText,
+  IconCheck,
+} from '@/components/icons';
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   active: { label: 'In Progress', color: 'var(--color-warning)' },
@@ -69,23 +78,23 @@ export default function DashboardPage() {
     <main className="container" style={{ maxWidth: '720px', paddingTop: '1.5rem', paddingBottom: '3rem' }}>
       {/* Top Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-        <div className="logo-mark" style={{ marginBottom: 0 }}>
-          <span className="icon">🏥</span>
+        <div className="logo-mark" style={{ marginBottom: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <IconHospital size={22} color="var(--color-primary)" />
           <span>MediKiosk</span>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           <Link
             href="/admin"
-            style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-primary-dark)' }}
+            style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-primary-dark)', display: 'inline-flex', alignItems: 'center', gap: 4 }}
           >
-            🛡️ Admin Gate
+            <IconShield size={14} /> Admin Gate
           </Link>
           <Link
             href="/doctor"
-            style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-secondary)' }}
+            style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-secondary)', display: 'inline-flex', alignItems: 'center', gap: 4 }}
           >
-            🩺 Doctor Queue
+            <IconStethoscope size={14} /> Doctor Queue
           </Link>
           <button
             onClick={handleLogout}
@@ -114,7 +123,7 @@ export default function DashboardPage() {
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <span style={{ fontSize: '1.25rem' }}>🎫</span>
+              <IconClock size={20} color="var(--color-primary)" />
               <h3 style={{ fontSize: '1.125rem', fontWeight: 700, color: 'var(--color-text)' }}>
                 Live OPD Token Tracker
               </h3>
@@ -170,7 +179,7 @@ export default function DashboardPage() {
                       boxShadow: isCurrent ? '0 0 0 3px rgba(13, 148, 136, 0.25)' : 'none',
                     }}
                   >
-                    {isDone ? '✓' : idx + 1}
+                    {isDone ? <IconCheck size={12} strokeWidth={3} /> : idx + 1}
                   </div>
                   <div
                     style={{
@@ -189,19 +198,21 @@ export default function DashboardPage() {
           {/* Dynamic Status Callout Banner */}
           {queueStatus.status === 'awaiting_triage' && (
             <div className="alert alert-warning" style={{ marginBottom: 0 }}>
-              <span>
-                ⏳ <strong>AI Intake submitted.</strong> Awaiting quick Super Admin review & priority confirmation before
-                doctor queue admission.
+              <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <IconClock size={16} />
+                <span><strong>AI Intake submitted.</strong> Awaiting quick Super Admin review & priority confirmation before doctor queue admission.</span>
               </span>
             </div>
           )}
 
           {queueStatus.status === 'queued' && (
             <div className="alert alert-success" style={{ marginBottom: 0 }}>
-              <span>
-                🩺 <strong>You are in the Doctor Queue!</strong> Your position is{' '}
-                <strong>#{queueStatus.queue_position || 1}</strong> in line (~{queueStatus.estimated_wait_minutes || 5} min
-                estimated wait).
+              <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <IconStethoscope size={16} />
+                <span>
+                  <strong>You are in the Doctor Queue!</strong> Your position is{' '}
+                  <strong>#{queueStatus.queue_position || 1}</strong> in line (~{queueStatus.estimated_wait_minutes || 5} min estimated wait).
+                </span>
               </span>
             </div>
           )}
@@ -217,16 +228,18 @@ export default function DashboardPage() {
                 marginBottom: 0,
               }}
             >
-              <span>
-                📢 <strong>Doctor is calling your token now!</strong> Please proceed to <strong>Consultation Room 3</strong>.
+              <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <IconAlertTriangle size={16} />
+                <span><strong>Doctor is calling your token now!</strong> Please proceed to <strong>Consultation Room 3</strong>.</span>
               </span>
             </div>
           )}
 
           {queueStatus.status === 'in_consultation' && (
             <div className="alert alert-success" style={{ marginBottom: 0 }}>
-              <span>
-                🩺 <strong>Consultation in progress</strong> with Doctor.
+              <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <IconStethoscope size={16} />
+                <span><strong>Consultation in progress</strong> with Doctor.</span>
               </span>
             </div>
           )}
@@ -243,15 +256,16 @@ export default function DashboardPage() {
               }}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-                <h4 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--color-primary-dark)' }}>
-                  📄 Official Digital Prescription (Rx)
+                <h4 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--color-primary-dark)', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <IconFileText size={18} /> Official Digital Prescription (Rx)
                 </h4>
                 <button
                   onClick={() => window.print()}
                   className="btn btn-secondary"
-                  style={{ width: 'auto', padding: '0.25rem 0.75rem', fontSize: '0.75rem' }}
+                  style={{ width: 'auto', padding: '0.25rem 0.75rem', fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: 6 }}
                 >
-                  🖨 Print / Save
+                  <IconFileText size={14} />
+                  <span>Print / Save</span>
                 </button>
               </div>
 
@@ -329,7 +343,12 @@ export default function DashboardPage() {
           disabled={creating}
           style={{ background: 'white', color: 'var(--color-primary)', fontWeight: 700, maxWidth: '240px', margin: '0 auto' }}
         >
-          {creating ? <span className="spinner" /> : '🩺 Begin New Intake'}
+          {creating ? <span className="spinner" /> : (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
+              <IconStethoscope size={16} />
+              <span>Begin New Intake</span>
+            </span>
+          )}
         </button>
       </div>
 

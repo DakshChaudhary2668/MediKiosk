@@ -2,13 +2,15 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { register, login } from '@/lib/api';
+import { register, login, setToken } from '@/lib/api';
+import { IconHospital, IconAlertTriangle } from "@/components/icons";
 
 export default function RegisterPage() {
   const router = useRouter();
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -18,10 +20,9 @@ export default function RegisterPage() {
     setLoading(true);
     try {
       await register(email, password, fullName);
-      // Auto-login after registration
-      const data = await login(email, password);
-      localStorage.setItem('medikiosk_user_id', data.user_id);
-      router.push('/consent');
+      const auth = await login(email, password);
+      setToken(auth.access_token);
+      router.push('/dashboard');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Registration failed');
     } finally {
@@ -32,15 +33,20 @@ export default function RegisterPage() {
   return (
     <main className="container" style={{ paddingTop: '3rem' }}>
       <div className="card">
-        <div className="logo-mark">
-          <span className="icon">🏥</span>
+        <div className="logo-mark" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <IconHospital size={22} color="var(--mk-primary)" />
           <span>MediKiosk</span>
         </div>
 
         <h1 className="page-title">Create Account</h1>
         <p className="page-subtitle">Register to use MediKiosk</p>
 
-        {error && <div className="alert alert-danger">⚠️ {error}</div>}
+        {error && (
+          <div className="alert alert-danger" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <IconAlertTriangle size={16} />
+            <span>{error}</span>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit}>
           <div className="field">
