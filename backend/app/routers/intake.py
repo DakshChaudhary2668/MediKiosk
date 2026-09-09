@@ -11,13 +11,17 @@ from datetime import datetime
 from fastapi import APIRouter, Header, HTTPException, UploadFile, File, Form
 from fastapi.responses import JSONResponse
 
+from app.auth_rbac import get_current_user, assert_patient_access
 from app.db import supabase
 from app.models import (
     ConversationState,
     IntakeMessageRequest,
+    IntakeSubmitRequest,
+    IntakeSubmitResponse,
     PatientCase,
     StartSessionRequest,
 )
+from app.persistence import save_assessment, record_p0_emergency_event
 from app.routers.auth import get_user_id
 from app.services import safety, ai_engine
 from app.services import stt as stt_service
@@ -235,17 +239,21 @@ async def send_message(body: IntakeMessageRequest, authorization: str = Header(.
     if safety_result.red_flag:
         state.red_flag_detected = True
         state.red_flag_signals.extend(safety_result.signal_ids)
-        state.conversation_status = "red_flagged"
+        state.conversation_status = "p0_escalated"
         _save_message(body.session_id, "patient", patient_text, input_mode=body.input_mode, original_text=patient_text)
         _save_message(body.session_id, "assistant", safety_result.message)
         _save_state(body.session_id, state)
+
+        # Trigger immediate case and P0 emergency escalation
+        await _generate_case(body.session_id, uid, state)
 
         return {
             "ai_message": safety_result.message,
             "red_flag": True,
             "signal_ids": safety_result.signal_ids,
-            "survey_complete": False,
-            "session_status": "red_flagged",
+            "survey_complete": True,
+            "priority": "P0",
+            "session_status": "p0_escalated",
         }
 
     # 2. Get conversation history
@@ -370,12 +378,50 @@ async def send_voice(
     except Exception as e:
         log.warning(f"TTS synthesis skipped: {e}")
 
-    return result
+@router.post("/submit", response_model=IntakeSubmitResponse)
+async def submit_intake_batch(body: IntakeSubmitRequest, authorization: str = Header(...)):
+    """Batch intake submission for Phase 0 frozen contract (POST /api/intake/submit)."""
+    user = get_current_user(authorization)
+    uid = body.patient_ref or user.user_id
+    assert_patient_access(user, uid)
+
+    sess_id = body.intake_id or str(uuid.uuid4())
+    answers = body.survey_answers or {}
+
+    state = ConversationState(
+        session_id=sess_id,
+        patient_id=uid,
+        conversation_status="completed",
+        language=body.language,
+        category=body.category or answers.get("category"),
+        completed_fields=list(answers.keys()),
+        answers=answers,
+    )
+
+    combined_text = " ".join(str(v) for v in answers.values())
+    if body.transcript:
+        combined_text += " " + body.transcript
+
+    safety_check = safety.check_red_flags(combined_text, body.language)
+    if safety_check.red_flag:
+        state.red_flag_detected = True
+        state.red_flag_signals.extend(safety_check.signal_ids)
+        state.conversation_status = "red_flagged"
+
+    _save_state(sess_id, state)
+    await _generate_case(sess_id, uid, state)
+
+    status = "p0_escalated" if state.red_flag_detected else "intake_submitted"
+    return IntakeSubmitResponse(
+        intake_id=sess_id,
+        status=status,
+        submitted_at=datetime.now().isoformat(),
+    )
 
 
 @router.get("/session/{session_id}")
 async def get_session(session_id: str, authorization: str = Header(...)):
-    uid = get_user_id(authorization)
+    user = get_current_user(authorization)
 
     session = None
     try:
@@ -395,6 +441,8 @@ async def get_session(session_id: str, authorization: str = Header(...)):
 
     if not session:
         raise HTTPException(404, "Session not found")
+
+    assert_patient_access(user, session["patient_id"])
 
     messages = []
     try:
@@ -423,7 +471,10 @@ async def get_session(session_id: str, authorization: str = Header(...)):
     except Exception:
         pass
 
+    sess_status = session.get("status", "active")
     return {
+        "session_id": session_id,
+        "status": sess_status,
         "session": session,
         "messages": messages,
         "case": patient_case,
@@ -432,7 +483,7 @@ async def get_session(session_id: str, authorization: str = Header(...)):
 
 @router.post("/session/{session_id}/complete")
 async def complete_session(session_id: str, authorization: str = Header(...)):
-    uid = get_user_id(authorization)
+    user = get_current_user(authorization)
 
     session = None
     try:
@@ -440,7 +491,6 @@ async def complete_session(session_id: str, authorization: str = Header(...)):
             supabase.table("patient_sessions")
             .select("*")
             .eq("id", session_id)
-            .eq("patient_id", uid)
             .single()
             .execute()
         )
@@ -451,11 +501,13 @@ async def complete_session(session_id: str, authorization: str = Header(...)):
     if not session:
         raise HTTPException(404, "Session not found")
 
+    assert_patient_access(user, session["patient_id"])
+
     state = _load_state(session)
     state.conversation_status = "completed"
     _save_state(session_id, state)
 
-    await _generate_case(session_id, uid, state)
+    await _generate_case(session_id, session["patient_id"], state)
 
     return {"status": "completed"}
 
@@ -508,14 +560,32 @@ async def _generate_case(session_id: str, patient_id: str, state: ConversationSt
             patient_id=patient_id,
             case=patient_case,
         )
-        _TRIAGE_ASSESSMENTS[assessment.assessment_id] = {
+
+        # Enforce P0 Auto-Escalation State Machine
+        status = "p0_escalated" if (assessment.priority == "P0" or state.red_flag_detected) else assessment.status
+        assessment.status = status
+
+        if status == "p0_escalated":
+            record_p0_emergency_event(
+                session_id=session_id,
+                patient_id=patient_id,
+                signal_ids=assessment.safety_flags or state.red_flag_signals,
+                chief_complaint=case_row.get("chief_complaint"),
+            )
+
+        assessment_record = {
+            "assessment_id": assessment.assessment_id,
+            "intake_id": session_id,
+            "session_id": session_id,
+            "patient_id": patient_id,
             "assessment": assessment.model_dump(),
             "case": case_row,
-            "patient_id": patient_id,
-            "session_id": session_id,
             "submitted_at": datetime.now().isoformat(),
-            "status": "awaiting_review",
+            "status": status,
         }
-        log.info(f"Pre-triage assessment auto-generated for session {session_id}: priority={assessment.priority}")
+        save_assessment(assessment_record)
+        _TRIAGE_ASSESSMENTS[assessment.assessment_id] = assessment_record
+        log.info(f"Pre-triage assessment auto-generated for session {session_id}: priority={assessment.priority} status={status}")
     except Exception as e:
         log.error(f"Failed to auto-generate pre-triage assessment: {e}")
+

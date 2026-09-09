@@ -1,6 +1,6 @@
 # Database Architecture & Supabase Schema
 
-MediKiosk uses **PostgreSQL** hosted via **Supabase**. The schema enforces strict foreign key relational integrity, JSONB structured medical dossiers, Row Level Security (RLS) data isolation, and immutable audit trails.
+MediKiosk uses **PostgreSQL** hosted via **Supabase**. The schema enforces strict foreign key relational integrity, JSONB structured medical dossiers, Row Level Security (RLS) data isolation, and immutable audit trails across 10 tables defined in `supabase/migration.sql`.
 
 ---
 
@@ -13,6 +13,10 @@ erDiagram
     PATIENTS ||--o{ MEDICAL_DOCUMENTS : "uploads"
     PATIENT_SESSIONS ||--o{ CONVERSATION_MESSAGES : "contains"
     PATIENT_SESSIONS ||--|| PATIENT_CASES : "synthesizes (1-to-1)"
+    PATIENT_SESSIONS ||--o{ TRIAGE_ASSESSMENTS : "evaluated by"
+    PATIENT_SESSIONS ||--o| DOCTOR_QUEUE_ITEMS : "enqueued as turn"
+    PATIENT_SESSIONS ||--o| CONSULTATION_RECORDS : "consulted (1-to-1)"
+    PATIENT_SESSIONS ||--o| EMERGENCY_EVENTS : "escalated as P0"
     AUTH_USERS ||--o{ AUDIT_LOGS : "acts as actor_id"
 
     PATIENTS {
@@ -32,9 +36,9 @@ erDiagram
     PATIENT_SESSIONS {
         uuid id PK
         uuid patient_id FK
-        text status "active | completed | red_flagged | cancelled"
+        text status "active | completed | p0_escalated | cancelled"
         text category "respiratory | fever | gastrointestinal | etc."
-        text language "en | hi | hinglish"
+        text language "en | hi | mr | ta | bn"
         text input_mode "text | voice"
         jsonb conversation_state
         timestamptz started_at
@@ -76,6 +80,79 @@ erDiagram
         timestamptz created_at
     }
 
+    TRIAGE_ASSESSMENTS {
+        text assessment_id PK
+        text intake_id
+        text session_id
+        text patient_id
+        text priority "P0 | P1 | P2 | P3"
+        text confidence_band "high | medium | low"
+        numeric confidence_score
+        jsonb uncertainty
+        jsonb safety_flags
+        jsonb evidence
+        text recommended_next_action
+        text status "awaiting_review | approved | overridden | escalated | p0_escalated | rejected"
+        text final_priority
+        text reviewed_by
+        timestamptz reviewed_at
+        text override_reason
+        text review_notes
+        jsonb case_snapshot
+        timestamptz created_at
+    }
+
+    DOCTOR_QUEUE_ITEMS {
+        uuid id PK
+        bigint token_number "UNIQUE"
+        text session_id "UNIQUE"
+        text patient_id
+        text patient_name
+        int age
+        text gender
+        text priority "P1 | P2 | P3"
+        text status "queued | called | in_consultation | completed | skipped"
+        text chief_complaint
+        text category
+        timestamptz arrival_time
+        timestamptz approved_at
+        timestamptz called_at
+        timestamptz consultation_started_at
+        timestamptz consultation_completed_at
+        jsonb case_snapshot
+        jsonb assessment_snapshot
+    }
+
+    CONSULTATION_RECORDS {
+        text consultation_id PK
+        text session_id "UNIQUE"
+        text patient_id
+        text doctor_id
+        text doctor_name
+        bigint token_number
+        text diagnosis
+        text clinical_notes
+        jsonb prescriptions
+        int follow_up_days
+        text general_advice
+        text referral_specialty
+        timestamptz created_at
+    }
+
+    EMERGENCY_EVENTS {
+        uuid id PK
+        text session_id
+        text patient_id
+        text priority "P0"
+        jsonb signal_ids
+        text status "p0_escalated | alert_fired | acknowledged | handover | resolved"
+        text coordination_notes
+        text acknowledged_by
+        timestamptz acknowledged_at
+        jsonb timeline
+        timestamptz created_at
+    }
+
     MEDICAL_DOCUMENTS {
         uuid id PK
         uuid patient_id FK
@@ -88,7 +165,7 @@ erDiagram
     AUDIT_LOGS {
         uuid id PK
         uuid actor_id
-        text action "consent_given | case_generated | triage_approved | consultation_completed"
+        text action
         text entity_type
         uuid entity_id
         jsonb details
@@ -98,123 +175,145 @@ erDiagram
 
 ---
 
-## 📋 Table Specifications
+## 📋 Table Catalog & Schema Definitions
 
 ### 1. `patients`
-- **Purpose:** Stores demographic and consent status for patient accounts. Primary key maps directly to `auth.users(id)`.
-- **Columns:**
-  - `id` (UUID, PK, REFERENCES `auth.users(id)` ON DELETE CASCADE)
-  - `full_name` (TEXT)
-  - `age` (INTEGER)
-  - `gender` (TEXT)
-  - `blood_group` (TEXT)
-  - `phone` (TEXT)
-  - `emergency_contact` (TEXT)
-  - `consent_given` (BOOLEAN, DEFAULT FALSE)
-  - `consent_given_at` (TIMESTAMPTZ)
-  - `created_at` (TIMESTAMPTZ, DEFAULT NOW())
-  - `updated_at` (TIMESTAMPTZ, DEFAULT NOW())
+Demographic profile for authenticated patients.
+- `id` (UUID, PK, references `auth.users.id` on delete cascade)
+- `full_name` (TEXT)
+- `age` (INTEGER)
+- `gender` (TEXT)
+- `blood_group` (TEXT)
+- `phone` (TEXT)
+- `emergency_contact` (TEXT)
+- `consent_given` (BOOLEAN, default `FALSE`)
+- `consent_given_at` (TIMESTAMPTZ)
+- `created_at`, `updated_at` (TIMESTAMPTZ, default `NOW()`)
 
 ### 2. `patient_sessions`
-- **Purpose:** Represents an intake encounter / kiosk interview session.
-- **Columns:**
-  - `id` (UUID, PK, DEFAULT `gen_random_uuid()`)
-  - `patient_id` (UUID, NOT NULL, REFERENCES `patients(id)` ON DELETE CASCADE)
-  - `status` (TEXT, CHECK `status IN ('active', 'completed', 'red_flagged', 'cancelled')`)
-  - `category` (TEXT)
-  - `language` (TEXT, DEFAULT `'en'`)
-  - `input_mode` (TEXT, DEFAULT `'text'`)
-  - `conversation_state` (JSONB, DEFAULT `'{}'`)
-  - `started_at` (TIMESTAMPTZ, DEFAULT NOW())
-  - `completed_at` (TIMESTAMPTZ)
+Tracks conversational intake lifecycles.
+- `id` (UUID, PK, default `gen_random_uuid()`)
+- `patient_id` (UUID, FK -> `patients.id`)
+- `status` (TEXT, check: `active`, `completed`, `red_flagged`, `p0_escalated`, `cancelled`)
+- `category` (TEXT, e.g. `respiratory`, `fever`, `cardiovascular`)
+- `language` (TEXT, check: `en`, `hi`, `mr`, `ta`, `bn`, `hinglish`)
+- `input_mode` (TEXT, default `text`)
+- `conversation_state` (JSONB, default `{}`)
+- `started_at`, `completed_at` (TIMESTAMPTZ)
 
 ### 3. `conversation_messages`
-- **Purpose:** Transcript log of dialogue turns between patient and AI intake assistant.
-- **Columns:**
-  - `id` (UUID, PK, DEFAULT `gen_random_uuid()`)
-  - `session_id` (UUID, NOT NULL, REFERENCES `patient_sessions(id)` ON DELETE CASCADE)
-  - `speaker` (TEXT, CHECK `speaker IN ('patient', 'assistant')`)
-  - `content` (TEXT, NOT NULL)
-  - `original_text` (TEXT) — Preserves raw verbatim patient statements.
-  - `language` (TEXT)
-  - `input_mode` (TEXT, DEFAULT `'text'`)
-  - `audio_path` (TEXT) — Optional storage URI if audio is preserved.
-  - `stt_confidence` (NUMERIC)
-  - `metadata` (JSONB, DEFAULT `'{}'`)
-  - `created_at` (TIMESTAMPTZ, DEFAULT NOW())
+Full conversational audit trail per turn.
+- `id` (UUID, PK)
+- `session_id` (UUID, FK -> `patient_sessions.id`)
+- `speaker` (TEXT, check: `patient`, `assistant`)
+- `content` (TEXT, cleaned text)
+- `original_text` (TEXT, raw transcript)
+- `language` (TEXT)
+- `input_mode` (TEXT)
+- `audio_path` (TEXT)
+- `stt_confidence` (NUMERIC)
+- `metadata` (JSONB)
+- `created_at` (TIMESTAMPTZ)
 
 ### 4. `patient_cases`
-- **Purpose:** Structured, validated pre-consultation dossier synthesized at interview conclusion.
-- **Crucial Rule:** Contains **no diagnosis** field by design.
-- **Columns:**
-  - `id` (UUID, PK, DEFAULT `gen_random_uuid()`)
-  - `session_id` (UUID, UNIQUE, NOT NULL, REFERENCES `patient_sessions(id)` ON DELETE CASCADE)
-  - `patient_id` (UUID, NOT NULL, REFERENCES `patients(id)` ON DELETE CASCADE)
-  - `chief_complaint` (TEXT)
-  - `category` (TEXT)
-  - `duration` (TEXT)
-  - `severity` (INTEGER, 1–10)
-  - `symptoms` (JSONB, DEFAULT `'[]'`)
-  - `negative_symptoms` (JSONB, DEFAULT `'[]'`)
-  - `relevant_history` (JSONB, DEFAULT `'[]'`)
-  - `current_medications` (JSONB, DEFAULT `'[]'`)
-  - `allergies` (JSONB, DEFAULT `'[]'`)
-  - `patient_concerns` (TEXT)
-  - `red_flag_detected` (BOOLEAN, DEFAULT FALSE)
-  - `red_flag_details` (JSONB)
-  - `completion_status` (TEXT, DEFAULT `'incomplete'`)
-  - `raw_extracted_data` (JSONB, DEFAULT `'{}'`)
-  - `created_at` (TIMESTAMPTZ, DEFAULT NOW())
+Structured clinical dossier synthesized from intake dialogue.
+- `id` (UUID, PK)
+- `session_id` (UUID, FK -> `patient_sessions.id`, UNIQUE)
+- `patient_id` (UUID, FK -> `patients.id`)
+- `chief_complaint` (TEXT)
+- `category` (TEXT)
+- `duration` (TEXT)
+- `severity` (INTEGER, check: `severity BETWEEN 1 AND 10`)
+- `symptoms`, `negative_symptoms`, `relevant_history`, `current_medications`, `allergies` (JSONB)
+- `patient_concerns` (TEXT)
+- `red_flag_detected` (BOOLEAN, default `FALSE`)
+- `red_flag_details` (JSONB)
+- `completion_status` (TEXT)
+- `raw_extracted_data` (JSONB)
 
-### 5. `medical_documents`
-- **Purpose:** Tracks patient-uploaded health documents, lab tests, and imaging records.
-- **Columns:**
-  - `id` (UUID, PK, DEFAULT `gen_random_uuid()`)
-  - `patient_id` (UUID, NOT NULL, REFERENCES `patients(id)` ON DELETE CASCADE)
-  - `file_name` (TEXT)
-  - `file_type` (TEXT)
-  - `storage_path` (TEXT)
-  - `uploaded_at` (TIMESTAMPTZ, DEFAULT NOW())
+### 5. `triage_assessments`
+AI Pre-Triage recommendations and Super Admin review decisions.
+- `assessment_id` (TEXT, PK)
+- `intake_id` (TEXT), `session_id` (TEXT), `patient_id` (TEXT)
+- `priority` (TEXT, check: `P0`, `P1`, `P2`, `P3`)
+- `confidence_band` (TEXT, check: `high`, `medium`, `low`)
+- `confidence_score` (NUMERIC, default 0.8)
+- `uncertainty`, `safety_flags`, `evidence` (JSONB)
+- `recommended_next_action` (TEXT)
+- `status` (TEXT, check: `awaiting_review`, `approved`, `overridden`, `escalated`, `p0_escalated`, `rejected`, `assessment_failed`)
+- `final_priority` (TEXT)
+- `reviewed_by` (TEXT), `reviewed_at` (TIMESTAMPTZ)
+- `override_reason` (TEXT), `review_notes` (TEXT)
+- `case_snapshot` (JSONB)
 
-### 6. `audit_logs`
-- **Purpose:** Immutable compliance record of safety decisions, consents, and status changes.
-- **Columns:**
-  - `id` (UUID, PK, DEFAULT `gen_random_uuid()`)
-  - `actor_id` (UUID)
-  - `action` (TEXT, NOT NULL)
-  - `entity_type` (TEXT)
-  - `entity_id` (UUID)
-  - `details` (JSONB, DEFAULT `'{}'`)
-  - `created_at` (TIMESTAMPTZ, DEFAULT NOW())
+### 6. `doctor_queue_items`
+Active OPD doctor queue for approved patients (P1, P2, P3 only; P0 is strictly forbidden).
+- `id` (UUID, PK)
+- `token_number` (BIGINT, UNIQUE)
+- `session_id` (TEXT, UNIQUE)
+- `patient_id`, `patient_name` (TEXT)
+- `age` (INTEGER), `gender` (TEXT)
+- `priority` (TEXT, check: `P1`, `P2`, `P3`)
+- `status` (TEXT, check: `queued`, `called`, `in_consultation`, `completed`, `skipped`)
+- `chief_complaint`, `category` (TEXT)
+- `arrival_time`, `approved_at`, `called_at`, `consultation_started_at`, `consultation_completed_at` (TIMESTAMPTZ)
+- `case_snapshot`, `assessment_snapshot` (JSONB)
+
+### 7. `consultation_records`
+Official clinical records signed by the attending doctor.
+- `consultation_id` (TEXT, PK)
+- `session_id` (TEXT, UNIQUE)
+- `patient_id`, `doctor_id`, `doctor_name` (TEXT)
+- `token_number` (BIGINT)
+- `diagnosis` (TEXT, mandatory official diagnosis)
+- `clinical_notes` (TEXT, examination and observations)
+- `prescriptions` (JSONB, array of prescribed medications with dosage, frequency, and instructions)
+- `follow_up_days` (INTEGER)
+- `general_advice`, `referral_specialty` (TEXT)
+
+### 8. `emergency_events`
+Audit and dispatch timeline for P0 emergency escalations.
+- `id` (UUID, PK)
+- `session_id`, `patient_id` (TEXT)
+- `priority` (TEXT, default `'P0'`)
+- `signal_ids` (JSONB)
+- `status` (TEXT, check: `p0_escalated`, `alert_fired`, `acknowledged`, `handover`, `resolved`)
+- `coordination_notes`, `acknowledged_by` (TEXT)
+- `acknowledged_at` (TIMESTAMPTZ)
+- `timeline` (JSONB, chronological milestone events)
+
+### 9. `medical_documents`
+Metadata for files stored in Supabase Storage.
+- `id` (UUID, PK), `patient_id` (UUID, FK -> `patients.id`), `file_name`, `file_type`, `storage_path` (TEXT), `uploaded_at` (TIMESTAMPTZ).
+
+### 10. `audit_logs`
+Immutable regulatory trail for clinical actions and overrides.
+- `id` (UUID, PK), `actor_id` (UUID), `action` (TEXT), `entity_type` (TEXT), `entity_id` (UUID), `details` (JSONB), `created_at` (TIMESTAMPTZ).
 
 ---
 
-## 🛡️ Row Level Security (RLS) Policies
+## 🔒 Row Level Security (RLS) Policies
 
-All tables have RLS enabled:
-```sql
-ALTER TABLE patients ENABLE ROW LEVEL SECURITY;
-ALTER TABLE patient_sessions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE conversation_messages ENABLE ROW LEVEL SECURITY;
-ALTER TABLE patient_cases ENABLE ROW LEVEL SECURITY;
-ALTER TABLE medical_documents ENABLE ROW LEVEL SECURITY;
-```
-
-1. **`patients` Policy:** `auth.uid() = id` for `SELECT`, `UPDATE`, `INSERT`.
-2. **`patient_sessions` Policy:** `patient_id = auth.uid()` for all CRUD operations.
-3. **`conversation_messages` Policy:** `session_id IN (SELECT id FROM patient_sessions WHERE patient_id = auth.uid())`.
-4. **`patient_cases` Policy:** `patient_id = auth.uid()`.
-5. **`medical_documents` Policy:** `patient_id = auth.uid()`.
-6. **`audit_logs` Policy:** Restricted to service-role key (backend only).
+All 10 tables have Row Level Security enabled (`ALTER TABLE ... ENABLE ROW LEVEL SECURITY`):
+1. **Patients:** `patients_select_own` (`id = auth.uid()`), `patients_insert_own`, `patients_update_own`.
+2. **Sessions & Cases:** Restricted to session owner (`patient_id = auth.uid()`).
+3. **Messages & Documents:** Patient can read/insert their own messages and files.
+4. **Consultations:** `consultations_select_own` (`patient_id = auth.uid() OR auth.jwt() ->> 'role' IN ('doctor', 'admin', 'service_role')`).
+5. **Doctor Queue:** `queue_select_patient` (`patient_id = auth.uid() OR auth.jwt() ->> 'role' IN ('doctor', 'admin', 'service_role')`).
+6. **Audit Logs:** Service-role only write access.
 
 ---
 
 ## ⚡ Performance Indexes
 
-```sql
-CREATE INDEX IF NOT EXISTS idx_sessions_patient ON patient_sessions(patient_id);
-CREATE INDEX IF NOT EXISTS idx_messages_session ON conversation_messages(session_id);
-CREATE INDEX IF NOT EXISTS idx_cases_session ON patient_cases(session_id);
-CREATE INDEX IF NOT EXISTS idx_cases_patient ON patient_cases(patient_id);
-CREATE INDEX IF NOT EXISTS idx_docs_patient ON medical_documents(patient_id);
-```
+- `idx_messages_session`: `conversation_messages(session_id)`
+- `idx_cases_session`: `patient_cases(session_id)`
+- `idx_cases_patient`: `patient_cases(patient_id)`
+- `idx_docs_patient`: `medical_documents(patient_id)`
+- `idx_triage_session`: `triage_assessments(session_id)`
+- `idx_triage_patient`: `triage_assessments(patient_id)`
+- `idx_triage_status`: `triage_assessments(status)`
+- `idx_queue_status_priority`: `doctor_queue_items(status, priority, arrival_time)`
+- `idx_consultation_session`: `consultation_records(session_id)`
+- `idx_consultation_patient`: `consultation_records(patient_id)`
+- `idx_emergency_session`: `emergency_events(session_id)`

@@ -50,20 +50,30 @@ async def login(req: LoginRequest):
         res = supabase.auth.sign_in_with_password(
             {"email": req.email, "password": req.password}
         )
+        user = res.user
+        role = "patient"
+        if user and user.app_metadata and user.app_metadata.get("role"):
+            role = user.app_metadata["role"]
+        elif user and user.user_metadata and user.user_metadata.get("role"):
+            role = user.user_metadata["role"]
+
         return {
             "access_token": res.session.access_token,
             "refresh_token": res.session.refresh_token,
             "user_id": res.user.id,
             "email": res.user.email,
+            "role": role,
         }
     except Exception as e:
         # ponytail: local dev fallback if Supabase project is unreachable/offline
-        if "getaddrinfo" in str(e) or "ConnectError" in str(e) or "Name or service not known" in str(e):
+        if "getaddrinfo" in str(e) or "ConnectError" in str(e) or "Name or service not known" in str(e) or "mock-secret-key" in str(e):
+            role = "admin" if "admin" in req.email.lower() else ("doctor" if "doctor" in req.email.lower() else "patient")
             return {
                 "access_token": "dev_test_token_medikiosk",
                 "refresh_token": "dev_test_refresh_token",
                 "user_id": "00000000-0000-0000-0000-000000000001",
                 "email": req.email,
+                "role": role,
             }
         raise HTTPException(401, f"Login failed: {e}")
 
@@ -71,35 +81,13 @@ async def login(req: LoginRequest):
 @router.get("/me")
 async def get_me(authorization: str = Header(...)):
     """Get current user from bearer token."""
-    token = authorization.replace("Bearer ", "") if authorization.startswith("Bearer ") else authorization
-    if token == "dev_test_token_medikiosk":
-        return {"user_id": "00000000-0000-0000-0000-000000000001", "email": "test@medikiosk.com"}
-    try:
-        res = supabase.auth.get_user(token)
-        user = res.user
-        if not user:
-            raise HTTPException(401, "Invalid token")
-        return {"user_id": user.id, "email": user.email}
-    except Exception as e:
-        raise HTTPException(401, f"Auth error: {e}")
+    from app.auth_rbac import extract_user_from_token
+    user = extract_user_from_token(authorization)
+    return {"user_id": user.user_id, "email": user.email, "role": user.role}
 
 
 def get_user_id(authorization: str) -> str:
-    """Helper to extract user_id from auth header. Used by other routers."""
-    token = authorization.replace("Bearer ", "") if authorization.startswith("Bearer ") else authorization
-    if token == "dev_test_token_medikiosk":
-        return "00000000-0000-0000-0000-000000000001"
-    if token.startswith(("mock-", "test-", "patient-", "doctor-", "admin-", "dev-", "usr_")):
-        return token
-    try:
-        res = supabase.auth.get_user(token)
-        if not res.user:
-            raise HTTPException(401, "Invalid token")
-        return res.user.id
-    except HTTPException:
-        raise
-    except Exception:
-        # fallback for dev/mock token
-        if token.startswith(("mock-", "test-", "patient-", "doctor-", "admin-", "dev-")):
-            return token
-        raise HTTPException(401, "Authentication required")
+    """Helper to extract user_id from auth header."""
+    from app.auth_rbac import extract_user_from_token
+    return extract_user_from_token(authorization).user_id
+

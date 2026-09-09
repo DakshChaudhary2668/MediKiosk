@@ -14,11 +14,11 @@ graph LR
         AdminStation[Admin / Doctor Desktops]
     end
 
-    subgraph FrontendHost["Frontend Hosting (Vercel / AWS CloudFront)"]
-        NextServer[Next.js 14 Production Bundle<br/>Port 3000 / Edge Nodes]
+    subgraph FrontendHost["Frontend Hosting (Vercel / AWS CloudFront / Node.js)"]
+        NextServer[Next.js 14 Production Bundle<br/>Port 3000 / 3001]
     end
 
-    subgraph BackendHost["Backend Service (Render / AWS ECS / GCP Cloud Run)"]
+    subgraph BackendHost["Backend Service (AWS ECS / GCP Cloud Run / Render)"]
         FastAPI_App[FastAPI Async Service<br/>Uvicorn Workers / Port 8000]
     end
 
@@ -56,7 +56,7 @@ graph LR
 | :--- | :--- | :--- | :--- |
 | `NEXT_PUBLIC_SUPABASE_URL` | **Yes** | Public Supabase project URL for client auth. | `https://xyzproject.supabase.co` |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | **Yes** | Anon/public Supabase client key. | `eyJhbGciOi...` |
-| `NEXT_PUBLIC_API_URL` | **Yes** | URL of the backend FastAPI service for Next.js rewrites. | `http://localhost:8000` or `https://api.medikiosk.internal` |
+| `NEXT_PUBLIC_API_URL` | **Yes** | URL of the backend FastAPI service for Next.js rewrites. | `http://127.0.0.1:8000` or `https://api.medikiosk.internal` |
 
 ---
 
@@ -89,8 +89,9 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
   - `short_name`: `"MediKiosk"`
   - `display`: `"standalone"`
   - `theme_color`: `"#0D9488"`
-  - `background_color`: `"#F8FAFC"`
+  - `background_color`: `"#0A0F1D"`
   - `orientation`: `"any"`
 - Security Headers configured in `next.config.js`:
   - `X-Frame-Options: DENY`
   - `X-Content-Type-Options: nosniff`
+  - Reverse proxy rewrites routing `/api/:path*` to `http://127.0.0.1:8000/api/:path*`.

@@ -1,77 +1,105 @@
-# Authentication, Authorization & Security Audit
+# Authentication, Authorization & Security Architecture
 
-This document details the security posture, authentication architecture, token handling, Row Level Security (RLS) data isolation, and privacy considerations in MediKiosk.
+This document details the security posture, authentication architecture, Role-Based Access Control (RBAC), walk-up kiosk identity management, Row Level Security (RLS) data isolation, and privacy considerations in MediKiosk.
 
 ---
 
 ## 🔐 Authentication Architecture
 
-MediKiosk leverages **Supabase Auth (GoTrue)** for secure identity management, password hashing (bcrypt), and JSON Web Token (JWT) issuance.
+MediKiosk leverages **Supabase Auth (GoTrue)** for secure identity management, password hashing (bcrypt), and JSON Web Token (JWT) issuance, supplemented by a centralized backend RBAC security layer in `app/auth_rbac.py`.
 
 ```mermaid
 sequenceDiagram
     autonumber
-    actor User as Client (PWA)
+    actor User as Client (Kiosk / Doctor / Admin)
     participant AuthRouter as FastAPI /api/auth
+    participant RBAC as auth_rbac.py Layer
     participant Supabase as Supabase GoTrue Auth
     participant DB as PostgreSQL Database
 
     User->>AuthRouter: POST /api/auth/login { email, password }
     AuthRouter->>Supabase: sign_in_with_password()
-    Supabase-->>AuthRouter: Returns JWT { access_token, refresh_token, user_id }
-    AuthRouter-->>User: Returns tokens & user identity
+    Supabase-->>AuthRouter: Returns JWT { access_token, refresh_token, user_id, role }
+    AuthRouter-->>User: Returns tokens & user identity with role
     User->>User: Stores access_token in localStorage
 
-    Note over User,AuthRouter: Subsequent Authenticated Requests
-    User->>AuthRouter: GET /api/patient/profile (Header: Authorization: Bearer <token>)
-    AuthRouter->>Supabase: get_user(token)
-    Supabase-->>AuthRouter: Validated User Object (user.id)
-    AuthRouter->>DB: Query data WHERE id = user.id
-    DB-->>AuthRouter: Row data
-    AuthRouter-->>User: JSON Response
+    Note over User,AuthRouter: Subsequent Protected API Request
+    User->>AuthRouter: GET /api/doctor/queue (Header: Authorization: Bearer <token>)
+    AuthRouter->>RBAC: require_doctor(authorization)
+    RBAC->>RBAC: Extract AuthUser (user_id, role)
+    alt Role is Not Doctor or Admin
+        RBAC-->>User: 403 Forbidden ("Doctor access required")
+    else Role is Doctor or Admin
+        RBAC-->>AuthRouter: Proceed
+        AuthRouter->>DB: Query doctor_queue_items
+        DB-->>AuthRouter: Active queue items
+        AuthRouter-->>User: 200 OK [QueueItems]
+    end
 ```
 
 ---
 
-## 🎫 Token Handling & Role Verification (`app/routers/auth.py`)
+## 👥 Role-Based Access Control (`app/auth_rbac.py`)
 
-- **Bearer Token Extraction:** All protected endpoints extract the user token via FastAPI's `Header(...)` parameter.
-- **`get_user_id(authorization: str) -> str` Helper:**
-  - Extracts the raw JWT from `Bearer <token>`.
-  - Calls `supabase.auth.get_user(token)` to ensure the token signature and expiration are valid.
-  - **Dev Mode Fallback:** Recognizes development and test tokens (`dev_test_token_medikiosk`, `mock-admin-token`, `mock-doctor-token`, `patient-101`, `usr_*`) to allow automated test execution and offline demonstrations without requiring live network calls to Supabase.
+Access control is centrally governed by `app/auth_rbac.py`:
+
+| Role | Permitted Actions | Restricted Endpoints |
+| :--- | :--- | :--- |
+| **`patient`** | Initiate intake, send messages/voice, view personal queue status, download personal digital Rx. | Blocked from `/api/triage/*`, `/api/doctor/*`. Blocked from other patients' sessions. |
+| **`doctor`** | View priority OPD queue, call patient turns, conduct consultations, author official diagnoses and digital prescriptions. | Blocked from `/api/triage/*` admin review actions. |
+| **`admin`** | Super Admin operations: review pending pre-triage assessments, approve/override priorities, coordinate P0 emergencies, seed test cases, inspect audit logs. | Full administrative access. |
+
+### Route Guards:
+- `require_admin(authorization: str | None) -> AuthUser`: Raises `HTTP 401` if unauthenticated, `HTTP 403 Forbidden` if role is not `admin`.
+- `require_doctor(authorization: str | None) -> AuthUser`: Raises `HTTP 401` if unauthenticated, `HTTP 403 Forbidden` if role is not `doctor` or `admin`.
+- `require_patient(authorization: str | None) -> AuthUser`: Ensures valid authenticated session.
+- `assert_patient_access(user: AuthUser, patient_id: str)`: Enforces patient data isolation. If a patient attempts to view or complete another patient's session, raises `HTTP 403 Forbidden`.
+
+---
+
+## 🖥️ Safe Kiosk Walk-Up Authentication
+
+To accommodate walk-up physical kiosks and public queue display screens without weakening overall security:
+1. **Public Polling Support:**
+   - `GET /api/patient/queue-status` accepts an optional `session_id` query parameter and an optional `Authorization: str | None = Header(None)`.
+   - Anonymous walk-up kiosks can display real-time wait times and token numbers for their active session without requiring pre-registered JWT credentials.
+2. **Kiosk Bearer Token Scoping:**
+   - Tokens containing `kiosk` (e.g. `Bearer kiosk-terminal-101`) are automatically mapped to role `patient` with a scoped user ID (`kiosk-terminal-101`).
+   - Kiosk tokens are granted patient intake privileges but are strictly rejected with `HTTP 403 Forbidden` if used against doctor or admin routes.
 
 ---
 
 ## 🛡️ Row Level Security (RLS) Policies
 
-All PostgreSQL tables have Row Level Security enabled in `supabase/migration.sql`:
+All 10 PostgreSQL tables have Row Level Security enabled in `supabase/migration.sql`:
 
 1. **`patients`:**
    - `SELECT USING (id = auth.uid())`
    - `UPDATE USING (id = auth.uid())`
    - `INSERT WITH CHECK (id = auth.uid())`
-2. **`patient_sessions`:**
-   - `SELECT USING (patient_id = auth.uid())`
-   - `INSERT WITH CHECK (patient_id = auth.uid())`
+2. **`patient_sessions` & `patient_cases`:**
+   - Restricted to session owner (`patient_id = auth.uid()`).
 3. **`conversation_messages`:**
    - `SELECT USING (session_id IN (SELECT id FROM patient_sessions WHERE patient_id = auth.uid()))`
-4. **`patient_cases`:**
+4. **`medical_documents`:**
    - `SELECT USING (patient_id = auth.uid())`
-5. **`medical_documents`:**
-   - `SELECT USING (patient_id = auth.uid())`
-6. **`audit_logs`:**
-   - No public/authenticated RLS policies; accessible exclusively via Supabase Service-Role key held securely by the backend service.
+5. **`consultation_records`:**
+   - `SELECT USING (patient_id = auth.uid() OR auth.jwt() ->> 'role' IN ('doctor', 'admin', 'service_role'))`
+6. **`doctor_queue_items`:**
+   - `SELECT USING (patient_id = auth.uid() OR auth.jwt() ->> 'role' IN ('doctor', 'admin', 'service_role'))`
+7. **`emergency_events`:**
+   - Service-role, doctor, and admin accessible.
+8. **`audit_logs`:**
+   - No public RLS policies; accessible exclusively via Supabase Service-Role key held securely by backend.
 
 ---
 
-## 🔒 Security Audit Findings & Risk Analysis
+## 🔒 Security Audit & Risk Analysis
 
-| Category | Finding | Current Implementation | Production Recommendation |
+| Category | Finding | Current Implementation | Production Hardening Recommendation |
 | :--- | :--- | :--- | :--- |
-| **Secrets in Client** | No API keys exposed in frontend bundle. | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` only. Groq & Sarvam keys are kept strictly in backend `.env`. | Maintain strict server-side secret boundaries. |
-| **Token Storage** | Tokens stored in browser `localStorage`. | Standard for PWA MVP. | Transition to `HttpOnly`, `SameSite=Strict` secure cookies in production to eliminate XSS token theft vectors. |
-| **Role-Based Access Control (RBAC)** | Admin & Doctor portals currently verify token presence. | Role is inferred from token prefix in dev mode. | Add formal Supabase Custom Claims / user metadata roles (`app_metadata: { role: 'doctor' | 'admin' | 'patient' }`) in production. |
-| **File Upload Validation** | File size validated on frontend (10MB) and backend. | MIME type checked during multipart upload. | Implement antivirus / malware scanning pipeline (e.g. ClamAV) on Supabase Storage upload hooks. |
-| **CORS Policy** | Restricted in `app/main.py`. | Explicitly allows `http://localhost:3000` and `http://127.0.0.1:3000`. | Update allowed origins in production to the hospital's verified domain / kiosk subnet. |
-| **Health Data Privacy (HIPAA/DISHA)** | Audio transcripts & patient cases contain Protected Health Information (PHI). | Data stored in encrypted PostgreSQL with RLS. | Enable full column-level encryption (pgcrypto) for sensitive clinical narrative fields and enforce automated data retention/purging policies. |
+| **Secrets in Client** | Verified clean. | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` only in frontend. Groq and Sarvam API keys remain exclusively on backend. | Maintain server-side isolation. |
+| **Token Storage** | LocalStorage in Next.js client. | Functional for kiosk PWA deployment. | Transition to `HttpOnly`, `SameSite=Strict` secure cookies for public web deployments. |
+| **CORS Policy** | Explicitly configured in `app/main.py`. | Allows `http://localhost:3000`, `http://127.0.0.1:3000`, `http://localhost:3001`, `http://127.0.0.1:3001`. Wildcards disallowed. | Configure to hospital kiosk private subnet in production. |
+| **Session Tampering** | Enforced in `assert_patient_access`. | Cross-patient access attempts return HTTP 403. | Retain automated regression tests in CI. |
+| **PHI Data Privacy** | Protected Health Information stored in PostgreSQL. | Encrypted at rest via Supabase AES-256; RLS enabled. | Configure automated data retention/purging policies for HIPAA/DISHA compliance. |

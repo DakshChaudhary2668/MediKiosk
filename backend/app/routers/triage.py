@@ -14,12 +14,25 @@ from datetime import datetime
 
 from fastapi import APIRouter, Header, HTTPException
 
+from app.auth_rbac import require_admin
 from app.db import supabase
 from app.models import (
     PatientCase,
     PreTriageAssessment,
     QueueItem,
+    ReviewDecideRequest,
     TriageApprovalRequest,
+)
+from app.persistence import (
+    _TRIAGE_STORE,
+    _QUEUE_STORE,
+    enqueue_doctor_item,
+    get_assessment,
+    get_assessment_by_session,
+    list_all_assessments,
+    record_p0_emergency_event,
+    acknowledge_p0_emergency,
+    save_assessment,
 )
 from app.routers.auth import get_user_id
 from app.services.pre_triage import run_ai_pre_triage
@@ -28,22 +41,21 @@ log = logging.getLogger("medikiosk.triage")
 
 router = APIRouter(prefix="/api/triage", tags=["triage"])
 
-# In-memory storage for triage reviews & active queue
-_TRIAGE_ASSESSMENTS: dict[str, dict] = {}
-_DOCTOR_QUEUE: list[dict] = []
-_TOKEN_COUNTER: int = 100
+# Backwards-compatible in-memory references pointing to persistence store
+_TRIAGE_ASSESSMENTS = _TRIAGE_STORE
+_DOCTOR_QUEUE = _QUEUE_STORE
 
 
 def get_all_assessments():
-    return _TRIAGE_ASSESSMENTS
+    return _TRIAGE_STORE
 
 
 def get_doctor_queue():
-    return _DOCTOR_QUEUE
+    return _QUEUE_STORE
 
 
 @router.post("/seed-demo")
-async def seed_demo_triage():
+async def seed_demo_triage(authorization: str = Header(None)):
     """Seed 10 realistic clinical test cases across P0, P1, P2, and P3 triage bands for live demo."""
     cases = [
         {
@@ -250,27 +262,110 @@ async def seed_demo_triage():
         },
     ]
 
-    _TRIAGE_ASSESSMENTS.clear()
+    _TRIAGE_STORE.clear()
+    _QUEUE_STORE.clear()
     seeded_count = 0
-    for item in cases:
+
+    # Explicit band definitions to guarantee deterministic demo coverage regardless of LLM connectivity
+    case_bands = {
+        "demo-sess-001": "P0",
+        "demo-sess-002": "P0",
+        "demo-sess-003": "P1",
+        "demo-sess-004": "P1",
+        "demo-sess-005": "P1",
+        "demo-sess-006": "P2",
+        "demo-sess-007": "P2",
+        "demo-sess-008": "P2",
+        "demo-sess-009": "P3",
+        "demo-sess-010": "P3",
+    }
+
+    doctors = [
+        {"name": "Dr. R. Vance", "specialty": "Emergency Medicine"},
+        {"name": "Dr. S. Kulkarni", "specialty": "Internal Medicine"},
+        {"name": "Dr. K. Iyer", "specialty": "Family Medicine"},
+    ]
+
+    for idx, item in enumerate(cases):
+        sess_id = item["session_id"]
+        intended_band = case_bands.get(sess_id, "P2")
+
         assessment = await run_ai_pre_triage(
-            intake_id=item["session_id"],
+            intake_id=sess_id,
             patient_id=item["patient_id"],
             case=item["case"],
         )
+        # Guarantee intended band for demo consistency
+        if intended_band == "P0":
+            assessment.priority = "P0"
+            assessment.status = "p0_escalated"
+            assessment.confidence_band = "high"
+            assessment.confidence_score = 0.98
+            assessment.recommended_next_action = "immediate_er_escalation"
+        else:
+            assessment.priority = intended_band
+            assessment.confidence_band = "high" if intended_band in ("P1", "P3") else "medium"
+            assessment.confidence_score = 0.92 if intended_band == "P1" else 0.84
+            assessment.status = "awaiting_review"
+            assessment.recommended_next_action = "human_review"
+
         case_dict = item["case"].model_dump()
         case_dict["patient_name"] = item["patient_name"]
-        _TRIAGE_ASSESSMENTS[assessment.assessment_id] = {
+
+        # Enforce P0 Auto-escalation state
+        is_p0 = assessment.priority == "P0" or item["case"].red_flag_detected
+        status = "p0_escalated" if is_p0 else "awaiting_review"
+        assessment.status = status
+
+        if is_p0:
+            # 1. P0 Auto-Escalation: Immediate emergency dispatch timeline without administrative gating
+            record_p0_emergency_event(
+                session_id=sess_id,
+                patient_id=item["patient_id"],
+                signal_ids=assessment.safety_flags or ["emergency_red_flag_triggered"],
+                chief_complaint=item["case"].chief_complaint,
+            )
+        elif intended_band in ("P1", "P2", "P3") and idx in (3, 5, 8):
+            # 2. Seed active doctor queue items for P1/P2/P3 demo visibility
+            assigned_doc = doctors[idx % len(doctors)]
+            enqueue_doctor_item({
+                "session_id": sess_id,
+                "patient_id": item["patient_id"],
+                "patient_name": item["patient_name"],
+                "age": item["case"].severity + 20,
+                "gender": "M" if " M)" in item["patient_name"] else "F",
+                "priority": intended_band,
+                "status": "queued" if idx != 3 else "called",
+                "chief_complaint": item["case"].chief_complaint,
+                "category": item["case"].category,
+                "arrival_time": datetime.now().isoformat(),
+                "doctor_name": assigned_doc["name"],
+                "referral_specialty": assigned_doc["specialty"],
+                "case": case_dict,
+                "assessment": assessment.model_dump(),
+            })
+            status = "approved"
+
+        entry = {
+            "assessment_id": assessment.assessment_id,
+            "intake_id": sess_id,
+            "session_id": sess_id,
+            "patient_id": item["patient_id"],
             "assessment": assessment.model_dump(),
             "case": case_dict,
-            "patient_id": item["patient_id"],
-            "session_id": item["session_id"],
             "submitted_at": datetime.now().isoformat(),
-            "status": "awaiting_review",
+            "status": status,
         }
+        save_assessment(entry)
         seeded_count += 1
 
-    return {"status": "seeded", "count": seeded_count, "total_pending": len(_TRIAGE_ASSESSMENTS)}
+    return {
+        "status": "seeded",
+        "count": seeded_count,
+        "total_triage": len(_TRIAGE_STORE),
+        "total_queued": len(_QUEUE_STORE),
+        "p0_active": len([v for v in _TRIAGE_STORE.values() if v.get("status") == "p0_escalated"]),
+    }
 
 
 @router.post("/assess")
@@ -291,7 +386,6 @@ async def trigger_pre_triage(
         pass
 
     if not case_data:
-        # Fallback to in-memory cases from intake router
         from app.routers.intake import _MEM_CASES
         case_data = _MEM_CASES.get(session_id, {
             "session_id": session_id,
@@ -311,30 +405,45 @@ async def trigger_pre_triage(
         case=patient_case,
     )
 
-    # 3. Store assessment
-    _TRIAGE_ASSESSMENTS[assessment.assessment_id] = {
+    is_p0 = assessment.priority == "P0" or patient_case.red_flag_detected
+    status = "p0_escalated" if is_p0 else assessment.status
+    assessment.status = status
+
+    if is_p0:
+        record_p0_emergency_event(
+            session_id=session_id,
+            patient_id=uid,
+            signal_ids=assessment.safety_flags or ["emergency_red_flag"],
+            chief_complaint=patient_case.chief_complaint,
+        )
+
+    entry = {
+        "assessment_id": assessment.assessment_id,
+        "intake_id": session_id,
+        "session_id": session_id,
+        "patient_id": uid,
         "assessment": assessment.model_dump(),
         "case": case_data,
-        "patient_id": uid,
-        "session_id": session_id,
         "submitted_at": datetime.now().isoformat(),
-        "status": "awaiting_review",
+        "status": status,
     }
-
+    save_assessment(entry)
     return assessment
 
 
 @router.get("/pending")
 async def list_pending_triage(authorization: str = Header(...)):
-    """Fetch all patient intakes awaiting Super Admin review."""
-    # List all awaiting review
+    """Fetch all patient intakes awaiting Super Admin review or emergency coordination."""
+    admin_user = require_admin(authorization)
+
+    # Include cases requiring attention: awaiting_review, p0_escalated, and assessment_failed
     pending = [
-        item for item in _TRIAGE_ASSESSMENTS.values()
-        if item["status"] == "awaiting_review"
+        item for item in list_all_assessments()
+        if item.get("status") in ("awaiting_review", "p0_escalated", "assessment_failed")
     ]
-    # Sort with P0/P1 on top
-    priority_weight = {"P0": 0, "P1": 1, "P2": 2, "P3": 3}
-    pending.sort(key=lambda x: priority_weight.get(x["assessment"]["priority"], 2))
+    # Sort with P0 on top, then P1, then P2, P3
+    priority_weight = {"P0": 0, "P1": 1, "P2": 2, "P3": 3, None: 4}
+    pending.sort(key=lambda x: priority_weight.get(x.get("assessment", {}).get("priority"), 2))
     return pending
 
 
@@ -345,44 +454,92 @@ async def review_assessment(
     authorization: str = Header(...),
 ):
     """Super Admin review gate: Approve, Override, Escalate, or Reject."""
-    admin_id = get_user_id(authorization)
-    global _TOKEN_COUNTER
+    admin_user = require_admin(authorization)
+    admin_id = admin_user.user_id
 
-    if assessment_id not in _TRIAGE_ASSESSMENTS:
+    item = get_assessment(assessment_id)
+    if not item:
+        # Check by intake_id / session_id
+        item = get_assessment_by_session(assessment_id)
+
+    if not item:
         raise HTTPException(404, "Triage assessment not found")
 
-    item = _TRIAGE_ASSESSMENTS[assessment_id]
-    original_priority = item["assessment"]["priority"]
-    final_priority = body.priority if body.action == "override" else original_priority
+    original_priority = item.get("assessment", {}).get("priority")
 
-    item["status"] = "approved" if body.action in ("approve", "override") else body.action
-    item["reviewed_by"] = admin_id
-    item["reviewed_at"] = datetime.now().isoformat()
-    item["final_priority"] = final_priority
-    item["override_reason"] = body.override_reason if body.action == "override" else None
-    item["review_notes"] = body.notes
+    # Strict rule: Override requires an explicit clinical reason
+    if body.action == "override":
+        if not body.override_reason or not body.override_reason.strip():
+            raise HTTPException(400, "An explicit override_reason is required when overriding triage priority.")
+        final_priority = body.priority
+    else:
+        final_priority = original_priority or body.priority
 
-    # If approved / overridden -> Admit into Doctor Queue
+    # Critical Safety Invariant: P0 cases cannot be approved into ordinary doctor queue as P0
+    if body.action == "approve" and (original_priority == "P0" or item.get("status") == "p0_escalated"):
+        raise HTTPException(
+            400,
+            "P0 emergency cannot be admitted into normal doctor queue. It is automatically escalated to ER. "
+            "To place patient in standard queue, use action='override' with target priority P1/P2/P3 and documented clinical reason."
+        )
+
+    # Idempotency: If already approved and queued, return existing token
+    if item.get("status") == "approved" and body.action in ("approve", "override"):
+        for q in _QUEUE_STORE:
+            if q["session_id"] == item["session_id"]:
+                return {
+                    "message": "Patient already approved and in doctor queue (idempotent)",
+                    "token_number": q["token_number"],
+                    "priority": q["priority"],
+                    "status": "queued",
+                }
+
+    # Handle Emergency Coordination Actions
+    if body.action in ("escalate", "acknowledge", "coordinate"):
+        acknowledge_p0_emergency(
+            session_id=item["session_id"],
+            admin_id=admin_id,
+            action=body.action,
+            notes=body.notes or body.override_reason,
+        )
+        item["status"] = "p0_escalated"
+        item["reviewed_by"] = admin_id
+        item["reviewed_at"] = datetime.now().isoformat()
+        save_assessment(item)
+        return {
+            "message": "Emergency protocol active: Patient escalated directly to ER Resuscitation.",
+            "priority": "P0",
+            "status": "escalated_er",
+        }
+
+    # Handle Approval / Override -> Admit into Doctor Queue (P1, P2, P3 only)
     if body.action in ("approve", "override"):
-        _TOKEN_COUNTER += 1
-        token = _TOKEN_COUNTER
-        queue_entry = {
-            "token_number": token,
+        if final_priority == "P0":
+            raise HTTPException(400, "Cannot queue patient as P0. P0 is reserved for emergency ER escalation.")
+
+        item["status"] = "approved"
+        item["reviewed_by"] = admin_id
+        item["reviewed_at"] = datetime.now().isoformat()
+        item["final_priority"] = final_priority
+        item["override_reason"] = body.override_reason if body.action == "override" else None
+        item["review_notes"] = body.notes
+
+        queue_entry = enqueue_doctor_item({
             "session_id": item["session_id"],
             "patient_id": item["patient_id"],
-            "patient_name": item["case"].get("patient_name") or "Patient " + str(token),
-            "age": item["case"].get("age"),
-            "gender": item["case"].get("gender"),
+            "patient_name": item.get("case", {}).get("patient_name") or f"Patient {item['session_id'][:8]}",
+            "age": item.get("case", {}).get("age"),
+            "gender": item.get("case", {}).get("gender"),
             "priority": final_priority,
             "status": "queued",
-            "chief_complaint": item["case"].get("chief_complaint"),
-            "category": item["case"].get("category"),
-            "arrival_time": item["submitted_at"],
-            "approved_at": item["reviewed_at"],
-            "case": item["case"],
-            "assessment": item["assessment"],
-        }
-        _DOCTOR_QUEUE.append(queue_entry)
+            "chief_complaint": item.get("case", {}).get("chief_complaint"),
+            "category": item.get("case", {}).get("category"),
+            "arrival_time": item.get("submitted_at") or datetime.now().isoformat(),
+            "case": item.get("case", {}),
+            "assessment": item.get("assessment", {}),
+        })
+
+        save_assessment(item)
 
         # Audit log in Supabase
         try:
@@ -395,7 +552,7 @@ async def review_assessment(
                     "original_priority": original_priority,
                     "final_priority": final_priority,
                     "override_reason": body.override_reason,
-                    "token": token,
+                    "token": queue_entry["token_number"],
                 },
             }).execute()
         except Exception:
@@ -403,17 +560,22 @@ async def review_assessment(
 
         return {
             "message": "Patient approved and placed in doctor queue",
-            "token_number": token,
+            "token_number": queue_entry["token_number"],
             "priority": final_priority,
             "status": "queued",
         }
 
-    elif body.action == "escalate":
-        # Emergency ER path
-        return {
-            "message": "Emergency protocol activated: Patient escalated directly to ER Resuscitation.",
-            "priority": "P0",
-            "status": "escalated_er",
-        }
+    elif body.action in ("reject", "rejects"):
+        item["status"] = "rejected"
+        item["reviewed_by"] = admin_id
+        item["reviewed_at"] = datetime.now().isoformat()
+        item["review_notes"] = body.notes
+        save_assessment(item)
+        return {"message": "Assessment rejected", "status": "rejected"}
 
-    return {"message": f"Assessment {body.action}ed successfully"}
+    item["status"] = body.action
+    item["reviewed_by"] = admin_id
+    item["reviewed_at"] = datetime.now().isoformat()
+    save_assessment(item)
+    return {"message": f"Assessment {body.action}ed successfully", "status": item["status"]}
+

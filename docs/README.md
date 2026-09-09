@@ -18,9 +18,9 @@ MediKiosk is an intelligent healthcare kiosk and clinical workflow platform desi
 | [database.md](file:///docs/database.md) | PostgreSQL / Supabase schema, entity relationships (ERD), RLS security policies, and indexes. |
 | [ai-pipeline.md](file:///docs/ai-pipeline.md) | Groq LLaMA prompt architecture, anti-hallucination guardrails, and question bank traversal. |
 | [voice-pipeline.md](file:///docs/voice-pipeline.md) | Sarvam Saaras STT & Bulbul TTS integration, WebM streaming, audio validation, and latency handling. |
-| [queue-engine.md](file:///docs/queue-engine.md) | P0/P1/P2/P3 acuity bands, Admin review gate, token allocation, and Doctor turn queue. |
+| [queue-engine.md](file:///docs/queue-engine.md) | P0 auto-escalation, P1/P2/P3 acuity bands, Admin review gate, token allocation, and Doctor turn queue. |
 | [business-rules.md](file:///docs/business-rules.md) | Strict medical boundaries, non-diagnostic invariants, deterministic red-flag overrides, and role limits. |
-| [authentication-security.md](file:///docs/authentication-security.md) | Supabase Auth, Bearer token handling, dev mode bypass, Row Level Security, and HIPAA/data privacy. |
+| [authentication-security.md](file:///docs/authentication-security.md) | Supabase Auth, Bearer token handling, kiosk auth, Row Level Security, and HIPAA/data privacy. |
 | [testing.md](file:///docs/testing.md) | Test suites, clinical workflow verification, anti-hallucination test suite, and execution guide. |
 | [development-setup.md](file:///docs/development-setup.md) | Step-by-step local developer setup guide (Python venv, Node.js, Supabase, Groq, Sarvam). |
 | [deployment.md](file:///docs/deployment.md) | Production build configuration, environment variables, hosting topology, and PWA setup. |
@@ -34,28 +34,35 @@ MediKiosk is an intelligent healthcare kiosk and clinical workflow platform desi
 
 ```mermaid
 flowchart TD
-    subgraph Patient["Patient Kiosk / PWA"]
-        A[Language Selection] --> B[Consent & Profile]
+    subgraph Patient["Patient Kiosk / PWA (/patient)"]
+        A[Language Selection] --> B[Consent & Demographic Identity]
         B --> C[Voice / Text AI Intake]
         C --> D[Structured Case Dossier]
     end
 
     subgraph AI["AI Acuity & Safety Layer"]
-        D --> E[Deterministic Red-Flag Check]
-        E --> F[Groq AI Pre-Triage Engine]
-        F --> G[P0 / P1 / P2 / P3 Acuity Proposal]
+        D --> E{Deterministic Red-Flag Check}
+        E -->|Red Flag Detected| F1[P0 Emergency Auto-Escalation]
+        E -->|No Red Flag| F2[Groq AI Pre-Triage Engine]
+        F2 --> G[P1 / P2 / P3 Acuity Proposal]
     end
 
-    subgraph AdminGate["Super Admin Review Gate"]
+    subgraph P0Lane["Emergency Protocol (Bypasses Review)"]
+        F1 --> P0Dispatch[Automatic Emergency Team Dispatch]
+        P0Dispatch --> P0Alert[Real-time Emergency Timeline & Kiosk Alert]
+    end
+
+    subgraph AdminGate["Super Admin Review Gate (/admin)"]
         G --> H{Admin Approval Gate}
         H -->|Approve / Override| I[Token Allocated & Priority Queue Admission]
-        H -->|P0 Emergency Escalate| J[Direct Emergency Room Transfer]
+        H -->|Reject / Clarify| HRej[Awaiting Clarification]
     end
 
-    subgraph Doctor["Doctor Workstation"]
-        I --> K[Live Priority Queue: P1 ➔ P2 ➔ P3]
+    subgraph Doctor["Doctor Workstation (/doctor)"]
+        I --> K[Live Priority Queue: P1 ➔ P2 ➔ P3 FIFO]
         K --> L[Turn Call & Medical Consultation]
         L --> M[Official Diagnosis & Digital Rx]
+        P0Alert -.->|Handover Coordination Only| DocHandover[P0 Handover Panel]
     end
 
     subgraph Output["Patient Records"]
@@ -68,8 +75,8 @@ flowchart TD
 
 ## 🔒 Absolute System Invariants
 
-1. **Non-Diagnostic AI Boundary:** The AI Engine (Groq LLaMA) **NEVER** issues medical diagnoses, prescriptions, drug dosages, or clinical certainties. It functions strictly as an intake structuring and triage advisory tool.
+1. **Non-Diagnostic AI Boundary:** The AI Engine (Groq LLaMA) **NEVER** issues medical diagnoses, differential diagnoses, disease probabilities, or clinical prescriptions. It functions strictly as an intake structuring and triage advisory tool.
 2. **Clinical Ownership:** Final diagnoses, clinical prescriptions, laboratory orders, and care plans are exclusively authored and signed by registered medical doctors.
-3. **Super Admin Human-in-the-Loop Gate:** AI pre-triage assessments do not directly inject patients into the active Doctor queue. A Super Admin or Triage Nurse must review evidence, approve, or override priority before queue admittance.
-4. **Emergency Bypass (P0):** True red flags (e.g. crushing chest pain with diaphoresis, acute stroke symptoms, severe anaphylaxis) trigger immediate deterministic emergency alerts and bypass standard OPD queues.
+3. **P0 Auto-Escalation:** P0 detection triggers automatic emergency dispatch, notification, and timeline generation **WITHOUT** requiring Admin approval. P0 cases never enter the normal review queue or approval-gated doctor queue. Admin actions are coordination/override only.
+4. **Super Admin Human-in-the-Loop Gate for P1–P3:** AI pre-triage recommendations for routine and urgent cases (P1, P2, P3) do not automatically admit patients to the Doctor queue. A Super Admin or Triage Nurse reviews evidence, confirms/overrides priority, and admits to the turn queue.
 5. **Zero Invented Facts:** Unknown responses ("I don't know") are never defaulted to negative clinical answers ("No allergies"). Facts are extracted only from direct user statements.

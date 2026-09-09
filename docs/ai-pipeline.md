@@ -1,17 +1,17 @@
 # AI Engine & Pre-Triage Pipeline
 
 The MediKiosk AI pipeline coordinates two distinct artificial intelligence workflows:
-1. **Conversational Intake Dialogue Engine** (`app/services/ai_engine.py`): Gathers and structures patient history turn-by-turn.
-2. **AI Pre-Triage Acuity Engine** (`app/services/pre_triage.py`): Analyzes the finalized case to generate an advisory operational priority band (`P0`–`P3`), confidence rating, uncertainty gaps, and traceable evidence citations.
+1. **Conversational Intake Dialogue Engine** (`app/services/ai_engine.py`): Gathers, validates, and structures patient history turn-by-turn.
+2. **AI Pre-Triage Acuity Engine** (`app/services/pre_triage.py`): Analyzes the finalized case to generate an advisory operational priority band (`P0`–`P3`), confidence score, uncertainty gaps, and traceable evidence citations.
 
 ---
 
 ## 🤖 Model & Provider Configuration
 
 - **Provider:** Groq Cloud API
-- **Model:** `llama-3.3-70b-versatile` (configured via `GROQ_MODEL` environment variable)
+- **Model:** `llama-3.3-70b-versatile` (configured via `GROQ_MODEL` environment variable; fallback to `openai/gpt-oss-20b`).
 - **Temperature:**
-  - `0.2` for Conversational Intake (ensures high fidelity, structure compliance, and conversational warmth).
+  - `0.2` for Conversational Intake (ensures high structure compliance, clinical caution, and conversational warmth).
   - `0.1` for Pre-Triage Acuity Assessment (maximizes clinical determinism and repeatability).
 - **Format Enforcement:** `response_format={"type": "json_object"}` on all Groq completions.
 
@@ -92,44 +92,36 @@ The conversation pathway is guided by `docs/ai-intake/QUESTION_BANK.json`, conta
 {
   "assessment_id": "triage_4e88a6adb82b",
   "intake_id": "demo-sess-001",
-  "patient_id": "patient-rajesh",
-  "priority": "P0",
+  "patient_id": "patient-priya",
+  "priority": "P1",
   "confidence_band": "high",
-  "confidence_score": 0.99,
+  "confidence_score": 0.94,
   "uncertainty": {
     "needs_human_review": true,
-    "reasons": ["Crushing chest pain radiating to left jaw with profuse sweating."],
-    "missing_information": ["Vital signs (Blood pressure, Pulse, SpO2)"],
-    "contradictions": []
+    "reasons": ["High fever with petechial rash requiring urgent platelet count"],
+    "missing_information": []
   },
-  "safety_flags": ["chest_pain_radiating", "diaphoresis"],
+  "safety_flags": ["high_grade_fever", "petechiae"],
   "evidence": [
     {
       "source": "patient_intake",
       "field": "chief_complaint",
-      "summary": "Crushing substernal chest pain radiating to left jaw"
+      "summary": "High fever with petechial rash on arms"
     }
   ],
-  "recommended_next_action": "immediate_er_escalation",
-  "generated_at": "2026-09-09T10:00:00Z",
+  "recommended_next_action": "human_review",
   "status": "awaiting_review"
 }
 ```
 
 ---
 
-## 🛑 Dual Safety Validation Layer
+## ⚡ Fallback Behavior & Error Handling
 
-```mermaid
-flowchart TD
-    UserMsg[Patient Text / Transcript] --> PreFilter[1. Pre-LLM Deterministic Regex Filter]
-    PreFilter -->|Red Flag Matched| RedAlert[Trigger Immediate Emergency Response]
-    PreFilter -->|Clean| GroqLLM[2. Groq LLM Inference]
-    GroqLLM --> PostFilter[3. Post-LLM Fact-Scan Regex Filter]
-    PostFilter -->|Red Flag Matched| RedAlert
-    PostFilter -->|Clean| ValidResponse[Deliver Structured Turn & Update State]
-```
-
-1. **Pre-LLM Regex Scan:** Scans raw patient input against compiled regular expressions for 7 critical emergencies before sending to Groq.
-2. **Post-LLM Fact Scan:** Scans the LLM's extracted JSON facts to ensure the model did not uncover or synthesize an emergency symptom during translation.
-3. **Emergency Escalation:** If either filter matches, the session status immediately shifts to `red_flagged`, sets `survey_complete = true`, and issues emergency directives.
+1. **LLM Unreachability / Rate Limits:**
+   - In `app/services/ai_engine.py`: If Groq returns a 429, 401, or connection error, `_fallback_response()` safely selects the next unanswered field from `QUESTION_BANK.json`. The interview continues seamlessly without hallucinated facts.
+2. **Pre-Triage Evaluation Failure:**
+   - In `app/services/pre_triage.py`: If the LLM pre-triage call fails, the assessment is marked with `status="assessment_failed"` and `priority=None`, routing the patient directly to the Super Admin review gate without guessing an unjustified acuity band.
+3. **Strict Non-Diagnostic Invariant:**
+   - The pre-triage prompt explicitly declares: *"This is an OPERATIONAL TRIAGE ADVISORY only, NOT a diagnosis or prescription."*
+   - Neither disease names nor differential probabilities are generated or stored on the `PreTriageAssessment` model.

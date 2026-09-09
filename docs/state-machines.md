@@ -12,87 +12,116 @@ stateDiagram-v2
 
     state active {
         [*] --> greeting: Initial turn
-        greeting --> collecting_complaint: Patient responds
+        greeting --> collecting_complaint: Patient responds with chief complaint
         collecting_complaint --> exploring_category: Category identified
-        exploring_category --> clarifying_symptoms: Follow-up question bank
-        clarifying_symptoms --> history_and_meds: Associated symptoms captured
+        exploring_category --> clarifying_symptoms: Question bank traversal
+        clarifying_symptoms --> history_and_meds: Associated symptoms & duration captured
     }
 
     active --> completed: survey_complete == true OR POST /complete
-    active --> red_flagged: Emergency keyword matched (Pre/Post Safety)
+    active --> p0_escalated: Emergency red flag matched (Pre/Post Safety Check)
     active --> cancelled: User exits or session expires
 
     completed --> [*]
-    red_flagged --> [*]
+    p0_escalated --> [*]: Auto-dispatches emergency protocol
     cancelled --> [*]
 ```
 
 ---
 
-## 2. Pre-Triage Assessment Lifecycle (`PreTriageAssessment`)
+## 2. Pre-Triage Assessment Lifecycle (`triage_assessments`)
 
 ```mermaid
 stateDiagram-v2
-    [*] --> awaiting_review: run_ai_pre_triage() completes
+    [*] --> awaiting_review: AI pre-triage completes (P1, P2, P3)
+    [*] --> p0_escalated: Acute red flag detected (P0)
+    [*] --> assessment_failed: AI inference error (Unassigned acuity)
 
     awaiting_review --> approved: Admin clicks "Approve" (Preserves AI priority)
-    awaiting_review --> overridden: Admin clicks "Override" (Priority modified with rationale)
-    awaiting_review --> escalated: Admin clicks "Escalate to ER" (Immediate P0)
-    awaiting_review --> rejected: Admin clicks "Reject" (Invalid / duplicate intake)
+    awaiting_review --> overridden: Admin clicks "Override" (With mandatory clinical reason)
+    awaiting_review --> rejected: Admin clicks "Reject" (Duplicate / invalid intake)
 
-    approved --> queued_in_doctor_turn: Token generated & pushed to doctor queue
-    overridden --> queued_in_doctor_turn: Token generated & pushed to doctor queue
+    assessment_failed --> overridden: Admin reviews raw dossier & manually assigns priority
 
-    queued_in_doctor_turn --> [*]
-    escalated --> [*]
+    approved --> queued: Unique token allocated & pushed to Doctor Queue
+    overridden --> queued: Unique token allocated & pushed to Doctor Queue
+
+    p0_escalated --> [*]: Dispatched directly to ER
     rejected --> [*]
+    queued --> [*]
 ```
 
 ---
 
-## 3. Doctor Turn Queue Item Lifecycle (`QueueItem`)
+## 3. P0 Emergency Timeline Lifecycle (`emergency_events`)
 
 ```mermaid
 stateDiagram-v2
-    [*] --> queued: Added to _DOCTOR_QUEUE via Admin Approval
+    [*] --> detected: Pre/post-inference safety engine flags emergency
+    detected --> dispatched: Emergency Resuscitation Team auto-alerted
+    dispatched --> acknowledged: Doctor / Admin acknowledges handover
+    acknowledged --> handover: Clinical handover in Resuscitation Bay
+    handover --> resolved: Patient stabilized / admitted to ICU
 
-    queued --> called: Doctor triggers POST /doctor/turn/{id}/call
-    called --> in_consultation: Doctor triggers POST /doctor/turn/{id}/start
-    in_consultation --> completed: Doctor submits POST /doctor/turn/{id}/consult
-
-    completed --> [*]: ConsultationRecord issued & Digital Rx published
+    resolved --> [*]
 ```
 
 ---
 
-## 4. Voice Interaction State Machine (Frontend `VoiceState`)
+## 4. Doctor Turn Queue Item Lifecycle (`doctor_queue_items`)
+
+*Invariant: P0 cases are strictly forbidden from entering this state machine.*
+
+```mermaid
+stateDiagram-v2
+    [*] --> queued: Added to _QUEUE_STORE via Admin Approval / Override
+
+    queued --> called: Doctor triggers POST /doctor/turn/{id}/call
+    called --> in_consultation: Doctor triggers POST /doctor/turn/{id}/in-consultation
+    in_consultation --> completed: Doctor submits POST /doctor/turn/{id}/consult (Diagnosis & Digital Rx)
+    called --> skipped: Patient absent when called
+
+    skipped --> queued: Turn re-queued by attending doctor
+    completed --> [*]: ConsultationRecord issued & Digital Rx published to patient
+```
+
+---
+
+## 5. Voice Interaction State Machine (Frontend `VoiceState`)
 
 ```mermaid
 stateDiagram-v2
     [*] --> IDLE: Component mounted
 
-    IDLE --> LISTENING: User presses microphone button (MediaRecorder starts)
-    LISTENING --> PROCESSING: User finishes speaking (Audio blob sent to /api/intake/voice)
-    PROCESSING --> SPEAKING: Backend returns TTS audio (Audio element plays WAV)
-    PROCESSING --> IDLE: Backend returns text response only
-    PROCESSING --> ERROR: STT fails, empty audio, or network failure
+    IDLE --> LISTENING: User taps microphone button (MediaRecorder starts)
+    IDLE --> PERMISSION_DENIED: Browser mic permission rejected
+    LISTENING --> TRANSCRIBING: Silence detected / User taps stop
+    TRANSCRIBING --> CONFIRM: Sarvam STT returns valid text
+    TRANSCRIBING --> NO_SPEECH: Empty speech detected (HTTP 422)
+    TRANSCRIBING --> NETWORK_ERROR: STT timeout / connection error
+    CONFIRM --> SPEAKING: Backend returns Sarvam TTS audio WAV
+    CONFIRM --> IDLE: Text response only
     SPEAKING --> IDLE: Audio playback finishes
-    ERROR --> IDLE: User dismisses alert or types text
+    NO_SPEECH --> IDLE: User retries or types text
+    NETWORK_ERROR --> IDLE: User retries
 ```
 
 ---
 
-## 5. Patient Dashboard Live State Progression
+## 6. Patient Portal Live State Progression (`GET /api/patient/queue-status`)
 
 ```mermaid
 stateDiagram-v2
-    [*] --> NoActiveSession: No unconsulted session
+    [*] --> NoActiveSession: No unconsulted intake session
 
-    NoActiveSession --> IntakeActive: User clicks "Begin New Intake"
-    IntakeActive --> AwaitingTriage: Survey complete; AI pre-triage generated
-    AwaitingTriage --> Queued: Super Admin approves intake into doctor queue
-    Queued --> Called: Doctor calls turn number (Pulse alert)
-    Called --> InConsultation: Doctor starts medical consultation
-    InConsultation --> ConsultationCompleted: Doctor signs Rx (Digital Rx Box rendered)
-    ConsultationCompleted --> NoActiveSession: Patient reviews prescription
+    NoActiveSession --> IntakeActive: User begins self-service intake
+    IntakeActive --> P0EmergencyActive: Acute emergency red-flag triggered
+    IntakeActive --> AwaitingTriage: Survey complete; waiting for Admin review
+    AwaitingTriage --> Queued: Super Admin approves intake into Doctor Queue
+    Queued --> Called: Doctor calls turn number (Pulsing room alert)
+    Called --> InConsultation: Doctor starts consultation
+    InConsultation --> ConsultationCompleted: Doctor signs Digital Rx
+    
+    P0EmergencyActive --> [*]: Emergency room directions displayed
+    ConsultationCompleted --> NoActiveSession: Patient prints/saves Digital Rx
 ```

@@ -80,7 +80,7 @@ def evaluate_deterministic_triage(case: PatientCase) -> PreTriageAssessment | No
             confidence_band="high",
             confidence_score=0.99,
             uncertainty=UncertaintyInfo(
-                needs_human_review=True,
+                needs_human_review=False,
                 reasons=["Deterministic emergency red-flag triggered in patient intake."],
             ),
             safety_flags=["emergency_red_flag_triggered"],
@@ -92,8 +92,9 @@ def evaluate_deterministic_triage(case: PatientCase) -> PreTriageAssessment | No
                 )
             ],
             recommended_next_action="immediate_er_escalation",
+            model={"name": "deterministic_safety_rules", "version": "1.0", "prompt_version": "safety_v1"},
             generated_at=datetime.now().isoformat(),
-            status="awaiting_review",
+            status="p0_escalated",
         )
     return None
 
@@ -111,8 +112,9 @@ async def run_ai_pre_triage(
         deterministic.patient_id = patient_id
         return deterministic
 
-    # 2. Build payload for LLM assessment
+    # 2. Build payload for LLM assessment (Strictly exclude direct PII: full name, contact, national ID)
     case_summary = {
+        "intake_id": intake_id,
         "chief_complaint": case.chief_complaint,
         "category": case.category,
         "duration": case.duration,
@@ -139,36 +141,47 @@ async def run_ai_pre_triage(
         raw = completion.choices[0].message.content or "{}"
         data = json.loads(raw)
 
-        return PreTriageAssessment(
-            assessment_id=f"triage_{uuid.uuid4().hex[:12]}",
-            intake_id=intake_id,
-            patient_id=patient_id,
-            priority=data.get("priority", "P2"),
-            confidence_band=data.get("confidence_band", "medium"),
-            confidence_score=float(data.get("confidence_score", 0.8)),
-            uncertainty=UncertaintyInfo(**data.get("uncertainty", {"needs_human_review": True})),
-            safety_flags=data.get("safety_flags", []),
-            evidence=[EvidenceItem(**e) for e in data.get("evidence", [])],
-            recommended_next_action=data.get("recommended_next_action", "human_review"),
-            generated_at=datetime.now().isoformat(),
-            status="awaiting_review",
-        )
-    except Exception as e:
-        log.error(f"AI Pre-triage LLM call failed (using safe heuristic fallback): {e}")
-        # Safe fallback based on severity
-        priority = "P1" if (case.severity and case.severity >= 8) else "P2"
+        raw_priority = data.get("priority")
+        if raw_priority not in ("P0", "P1", "P2", "P3"):
+            raise ValueError(f"Invalid priority from AI engine: '{raw_priority}'")
+
+        is_p0 = raw_priority == "P0" or case.red_flag_detected
+        priority = "P0" if is_p0 else raw_priority
+        status = "p0_escalated" if is_p0 else "awaiting_review"
+        recommended_action = "immediate_er_escalation" if is_p0 else data.get("recommended_next_action", "human_review")
+
         return PreTriageAssessment(
             assessment_id=f"triage_{uuid.uuid4().hex[:12]}",
             intake_id=intake_id,
             patient_id=patient_id,
             priority=priority,
+            confidence_band=data.get("confidence_band", "medium"),
+            confidence_score=float(data.get("confidence_score", 0.8)),
+            uncertainty=UncertaintyInfo(**data.get("uncertainty", {"needs_human_review": True})),
+            safety_flags=data.get("safety_flags", []),
+            evidence=[EvidenceItem(**e) for e in data.get("evidence", [])],
+            recommended_next_action=recommended_action,
+            model={"name": settings.groq_model, "version": "1.0", "prompt_version": "pretriage.v1"},
+            generated_at=datetime.now().isoformat(),
+            status=status,
+        )
+    except Exception as e:
+        log.error(f"AI Pre-triage LLM call failed: {e}")
+        # Safe failure handling: do not fabricate or guess a clinical priority band
+        return PreTriageAssessment(
+            assessment_id=f"triage_{uuid.uuid4().hex[:12]}",
+            intake_id=intake_id,
+            patient_id=patient_id,
+            priority=None,
             confidence_band="low",
-            confidence_score=0.5,
+            confidence_score=0.0,
             uncertainty=UncertaintyInfo(
                 needs_human_review=True,
-                reasons=["AI model unavailable; heuristic triage assigned. Human review required."],
+                reasons=["AI pre-triage engine unavailable or unparseable. Manual clinical triage required."],
+                missing_information=["Awaiting human triage assessment"],
+                contradictions=[],
             ),
-            safety_flags=[],
+            safety_flags=["ai_pre_triage_unavailable"],
             evidence=[
                 EvidenceItem(
                     source="patient_intake",
@@ -177,6 +190,8 @@ async def run_ai_pre_triage(
                 )
             ],
             recommended_next_action="human_review",
+            model={"name": settings.groq_model, "version": "failed", "prompt_version": "pretriage.v1"},
             generated_at=datetime.now().isoformat(),
-            status="awaiting_review",
+            status="assessment_failed",
         )
+

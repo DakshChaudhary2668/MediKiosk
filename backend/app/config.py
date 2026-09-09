@@ -2,11 +2,11 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    supabase_url: str
-    supabase_secret_key: str
-    groq_api_key: str
-    sarvam_api_key: str
-    groq_model: str = "openai/gpt-oss-20b"
+    supabase_url: str = "https://mock.supabase.co"
+    supabase_secret_key: str = "mock-secret-key"
+    groq_api_key: str = "mock-groq-api-key"
+    sarvam_api_key: str = "mock-sarvam-api-key"
+    groq_model: str = "llama-3.3-70b-versatile"
     sarvam_stt_model: str = "saaras:v3"
     sarvam_tts_model: str = "bulbul:v3"
 

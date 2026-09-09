@@ -87,6 +87,83 @@ CREATE TABLE IF NOT EXISTS audit_logs (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 7. triage_assessments (Super Admin Review Gate & AI Acuity)
+CREATE TABLE IF NOT EXISTS triage_assessments (
+  assessment_id TEXT PRIMARY KEY,
+  intake_id TEXT NOT NULL,
+  session_id TEXT NOT NULL,
+  patient_id TEXT NOT NULL,
+  priority TEXT CHECK (priority IN ('P0', 'P1', 'P2', 'P3')),
+  confidence_band TEXT DEFAULT 'medium',
+  confidence_score NUMERIC DEFAULT 0.8,
+  uncertainty JSONB DEFAULT '{}',
+  safety_flags JSONB DEFAULT '[]',
+  evidence JSONB DEFAULT '[]',
+  recommended_next_action TEXT DEFAULT 'human_review',
+  status TEXT NOT NULL DEFAULT 'awaiting_review' CHECK (status IN ('awaiting_review', 'approved', 'overridden', 'escalated', 'p0_escalated', 'rejected', 'assessment_failed')),
+  final_priority TEXT,
+  reviewed_by TEXT,
+  reviewed_at TIMESTAMPTZ,
+  override_reason TEXT,
+  review_notes TEXT,
+  case_snapshot JSONB DEFAULT '{}',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 8. doctor_queue_items (Active Clinical Queue: P1, P2, P3 only. P0 bypasses directly to ER)
+CREATE TABLE IF NOT EXISTS doctor_queue_items (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  token_number BIGINT UNIQUE NOT NULL,
+  session_id TEXT UNIQUE NOT NULL,
+  patient_id TEXT NOT NULL,
+  patient_name TEXT NOT NULL,
+  age INTEGER,
+  gender TEXT,
+  priority TEXT NOT NULL CHECK (priority IN ('P1', 'P2', 'P3')),
+  status TEXT NOT NULL DEFAULT 'queued' CHECK (status IN ('queued', 'called', 'in_consultation', 'completed', 'skipped')),
+  chief_complaint TEXT,
+  category TEXT,
+  arrival_time TIMESTAMPTZ DEFAULT NOW(),
+  approved_at TIMESTAMPTZ DEFAULT NOW(),
+  called_at TIMESTAMPTZ,
+  consultation_started_at TIMESTAMPTZ,
+  consultation_completed_at TIMESTAMPTZ,
+  case_snapshot JSONB DEFAULT '{}',
+  assessment_snapshot JSONB DEFAULT '{}'
+);
+
+-- 9. consultation_records (Doctor-authored official diagnosis & prescriptions)
+CREATE TABLE IF NOT EXISTS consultation_records (
+  consultation_id TEXT PRIMARY KEY,
+  session_id TEXT UNIQUE NOT NULL,
+  patient_id TEXT NOT NULL,
+  doctor_id TEXT NOT NULL,
+  doctor_name TEXT DEFAULT 'Dr. Clinical Consultant',
+  token_number BIGINT,
+  diagnosis TEXT NOT NULL,
+  clinical_notes TEXT NOT NULL,
+  prescriptions JSONB DEFAULT '[]',
+  follow_up_days INTEGER,
+  general_advice TEXT,
+  referral_specialty TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 10. emergency_events (P0 immediate emergency audit & coordination timeline)
+CREATE TABLE IF NOT EXISTS emergency_events (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  session_id TEXT NOT NULL,
+  patient_id TEXT NOT NULL,
+  priority TEXT NOT NULL DEFAULT 'P0',
+  signal_ids JSONB DEFAULT '[]',
+  status TEXT NOT NULL DEFAULT 'p0_escalated' CHECK (status IN ('p0_escalated', 'alert_fired', 'acknowledged', 'handover', 'resolved')),
+  coordination_notes TEXT,
+  acknowledged_by TEXT,
+  acknowledged_at TIMESTAMPTZ,
+  timeline JSONB DEFAULT '[]',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- === ROW LEVEL SECURITY ===
 
 ALTER TABLE patients ENABLE ROW LEVEL SECURITY;
@@ -94,6 +171,10 @@ ALTER TABLE patient_sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE conversation_messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE patient_cases ENABLE ROW LEVEL SECURITY;
 ALTER TABLE medical_documents ENABLE ROW LEVEL SECURITY;
+ALTER TABLE triage_assessments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE doctor_queue_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE consultation_records ENABLE ROW LEVEL SECURITY;
+ALTER TABLE emergency_events ENABLE ROW LEVEL SECURITY;
 
 -- Patients: own data only
 CREATE POLICY "patients_select_own" ON patients FOR SELECT USING (id = auth.uid());
@@ -122,8 +203,13 @@ CREATE POLICY "cases_update_own" ON patient_cases FOR UPDATE USING (patient_id =
 CREATE POLICY "docs_select_own" ON medical_documents FOR SELECT USING (patient_id = auth.uid());
 CREATE POLICY "docs_insert_own" ON medical_documents FOR INSERT WITH CHECK (patient_id = auth.uid());
 
--- Audit logs: service role only (no RLS policy for anon/authenticated)
--- The backend uses service_role key so RLS is bypassed for audit writes
+-- Consultations: patient sees own consultation; doctor/admin see all
+CREATE POLICY "consultations_select_own" ON consultation_records FOR SELECT
+  USING (patient_id = auth.uid() OR auth.jwt() ->> 'role' IN ('doctor', 'admin', 'service_role'));
+
+-- Doctor queue: patients can see their own item; doctor/admin can see queue
+CREATE POLICY "queue_select_patient" ON doctor_queue_items FOR SELECT
+  USING (patient_id = auth.uid() OR auth.jwt() ->> 'role' IN ('doctor', 'admin', 'service_role'));
 
 -- === INDEXES ===
 
@@ -132,6 +218,13 @@ CREATE INDEX IF NOT EXISTS idx_messages_session ON conversation_messages(session
 CREATE INDEX IF NOT EXISTS idx_cases_session ON patient_cases(session_id);
 CREATE INDEX IF NOT EXISTS idx_cases_patient ON patient_cases(patient_id);
 CREATE INDEX IF NOT EXISTS idx_docs_patient ON medical_documents(patient_id);
+CREATE INDEX IF NOT EXISTS idx_triage_session ON triage_assessments(session_id);
+CREATE INDEX IF NOT EXISTS idx_triage_patient ON triage_assessments(patient_id);
+CREATE INDEX IF NOT EXISTS idx_triage_status ON triage_assessments(status);
+CREATE INDEX IF NOT EXISTS idx_queue_status_priority ON doctor_queue_items(status, priority, arrival_time);
+CREATE INDEX IF NOT EXISTS idx_consultation_session ON consultation_records(session_id);
+CREATE INDEX IF NOT EXISTS idx_consultation_patient ON consultation_records(patient_id);
+CREATE INDEX IF NOT EXISTS idx_emergency_session ON emergency_events(session_id);
 
 -- === STORAGE BUCKET ===
 -- Create via Supabase Dashboard: Storage > New Bucket
