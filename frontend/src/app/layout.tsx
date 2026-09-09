@@ -1,16 +1,18 @@
-import type { Metadata, Viewport } from 'next';
-import '@/styles/globals.scss';
+import type { Metadata, Viewport } from "next";
+import "@/styles/globals.scss";
+import "./globals.css";
 
 export const metadata: Metadata = {
-  title: 'MediKiosk — AI Patient Intake',
-  description: 'AI-powered patient intake system for clinics. Complete your pre-consultation health assessment before seeing the doctor.',
+  title: { default: "MediKiosk", template: "%s | MediKiosk" },
+  description: "AI-powered patient intake and hospital queue optimisation.",
+  manifest: "/manifest.json",
 };
 
 export const viewport: Viewport = {
-  width: 'device-width',
+  width: "device-width",
   initialScale: 1,
   maximumScale: 1,
-  themeColor: '#0D9488',
+  themeColor: "#0B67F3",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

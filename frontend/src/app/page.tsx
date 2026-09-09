@@ -1,57 +1,78 @@
-'use client';
+"use client";
+import Link from "next/link";
+import { MKLogo } from "@/components/shared";
 
-import { useRouter } from 'next/navigation';
-import { useState } from 'react';
-
-const LANGUAGES = [
-  { code: 'en', label: 'English', emoji: '🇬🇧' },
-  { code: 'hi', label: 'हिन्दी', emoji: '🇮🇳' },
-  { code: 'hinglish', label: 'Hinglish', emoji: '🌐' },
-];
-
-export default function LandingPage() {
-  const router = useRouter();
-  const [selected, setSelected] = useState('en');
-
-  function handleContinue() {
-    localStorage.setItem('medikiosk_language', selected);
-    router.push('/login');
-  }
-
+export default function Home() {
   return (
-    <main className="container" style={{ paddingTop: '3rem' }}>
-      <div className="card" style={{ textAlign: 'center' }}>
-        <div className="logo-mark" style={{ justifyContent: 'center' }}>
-          <span className="icon">🏥</span>
-          <span>MediKiosk</span>
-        </div>
+    <div style={{
+      minHeight: "100dvh",
+      background: "var(--mk-canvas)",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: "32px 20px",
+    }}>
+      {/* Header */}
+      <MKLogo subtitle="Clinical Suite" />
 
-        <h1 className="page-title">Welcome</h1>
-        <p className="page-subtitle">
-          AI-powered patient intake — complete your health assessment before seeing the doctor.
-        </p>
+      <h1 className="mk-display" style={{ marginTop: 40, marginBottom: 8, textAlign: "center" }}>
+        MediKiosk
+      </h1>
+      <p className="mk-body" style={{ color: "var(--mk-text-muted)", textAlign: "center", maxWidth: 400, marginBottom: 48 }}>
+        AI-powered patient intake and hospital queue optimisation. Select your role to continue.
+      </p>
 
-        <p style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-lg)' }}>
-          Select your preferred language
-        </p>
-
-        <div className="category-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)', marginBottom: 'var(--space-xl)' }}>
-          {LANGUAGES.map(lang => (
-            <div
-              key={lang.code}
-              className={`category-card ${selected === lang.code ? 'selected' : ''}`}
-              onClick={() => setSelected(lang.code)}
+      {/* Role selector */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16, width: "100%", maxWidth: 680 }}>
+        {[
+          {
+            href: "/patient",
+            icon: "🏥",
+            role: "Patient",
+            desc: "Self-service intake kiosk",
+            color: "var(--mk-primary)",
+          },
+          {
+            href: "/doctor",
+            icon: "🩺",
+            role: "Doctor",
+            desc: "Clinical suite",
+            color: "var(--mk-success)",
+          },
+          {
+            href: "/admin",
+            icon: "⚙️",
+            role: "Super Admin",
+            desc: "Hospital operations",
+            color: "var(--mk-purple)",
+          },
+        ].map(({ href, icon, role, desc, color }) => (
+          <Link href={href} key={role} style={{ textDecoration: "none" }}>
+            <div className="mk-card" style={{
+              padding: 24,
+              cursor: "pointer",
+              transition: `transform 160ms var(--mk-ease), box-shadow 160ms var(--mk-ease)`,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              textAlign: "center",
+              gap: 8,
+            }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.transform = "translateY(-2px)"; (e.currentTarget as HTMLDivElement).style.boxShadow = "var(--mk-shadow-overlay)"; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.transform = ""; (e.currentTarget as HTMLDivElement).style.boxShadow = ""; }}
             >
-              <span className="emoji">{lang.emoji}</span>
-              {lang.label}
+              <div style={{ fontSize: 36 }}>{icon}</div>
+              <div className="mk-sec-title" style={{ color }}>{role}</div>
+              <div className="mk-meta">{desc}</div>
             </div>
-          ))}
-        </div>
-
-        <button className="btn btn-primary" onClick={handleContinue}>
-          Continue
-        </button>
+          </Link>
+        ))}
       </div>
-    </main>
+
+      <p className="mk-meta" style={{ marginTop: 48, textAlign: "center" }}>
+        MediKiosk is not a diagnosis tool. AI supports intake; a doctor makes the final clinical decision.
+      </p>
+    </div>
   );
 }
